@@ -4,22 +4,27 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Create from "./CreateCustomer";
 // import Manage from "./CustomerList";
 // import Dash from "./tabNavigationEmp";
-import { View, Text, StyleSheet, ScrollView, Alert,StatusBar } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  StatusBar,
+} from "react-native";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-
 
 import ViewLoan from "./ViewLoan";
 import Loan from "./Loan";
 import Customer from "./Customer";
 
-
 import PendingList from "./PendingList";
 import DueList from "./DueList";
 import Home from "./Home";
+import LoanCalculatorScreen from "./LoanCalculatorScreen";
 // import Employees from "./Employees";
-
 
 const Drawer = createDrawerNavigator();
 
@@ -28,7 +33,7 @@ const CustomDrawerContent = (props: {
 }) => {
   return (
     <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-      <StatusBar barStyle="dark-content"  />
+      <StatusBar barStyle="dark-content" />
       <View style={{ flex: 1, padding: 20, marginTop: 45 }}>
         <Text
           onPress={() => props.navigation.navigate("tabNavigationEmp")}
@@ -54,7 +59,7 @@ const CustomDrawerContent = (props: {
         >
           <AntDesign name="idcard" size={24} color="black" /> Loan Due
         </Text> */}
-        
+
         {/* <Text
           onPress={() => props.navigation.navigate("ViewLoan")}
           style={styles.drawertext}
@@ -84,14 +89,15 @@ const CustomDrawerContent = (props: {
           onPress={() => props.navigation.navigate("CollectionCity")}
           style={styles.drawertext}
         >
-          <MaterialIcons name="collections-bookmark" size={24} color="black" /> Due List
+          <MaterialIcons name="collections-bookmark" size={24} color="black" />{" "}
+          Due List
         </Text>
         <Text
           onPress={() => props.navigation.navigate("pending")}
           style={styles.drawertext}
         >
           <MaterialIcons name="pending-actions" size={24} color="black" />
-         Pending Loans
+          Pending Loans
         </Text>
 
         <View style={{ flex: 1 }} />
@@ -135,7 +141,7 @@ export default function App() {
           headerStyle: {},
         }}
       />
-        <Drawer.Screen
+      <Drawer.Screen
         name="ViewLoan"
         component={ViewLoan}
         options={{
@@ -146,7 +152,7 @@ export default function App() {
           },
         }}
       />
-       <Drawer.Screen
+      <Drawer.Screen
         name="CollectionCity"
         component={PendingList}
         options={{
@@ -167,7 +173,7 @@ export default function App() {
           headerStyle: { backgroundColor: "#07387A" },
         }}
       />
-        <Drawer.Screen
+      <Drawer.Screen
         name="pending"
         component={PendingList}
         options={{
@@ -225,6 +231,17 @@ export default function App() {
           headerShown: true,
           headerTintColor: "white",
           headerTitle: "Loan Due",
+          headerStyle: { backgroundColor: "#07387A" },
+        }}
+      />
+
+      <Drawer.Screen
+        name="Loan_Calculator"
+        component={LoanCalculatorScreen}
+        options={{
+          headerShown: true,
+          headerTintColor: "white",
+          headerTitle: "Calculator",
           headerStyle: { backgroundColor: "#07387A" },
         }}
       />

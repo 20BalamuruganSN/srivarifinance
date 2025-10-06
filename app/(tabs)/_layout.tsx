@@ -31,54 +31,86 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#FFD700', // Yellow color for active tab
+        tabBarInactiveTintColor: colorScheme === 'dark' ? '#FFFFFF' : '#000000', // White for dark mode, black for light mode
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
         tabBarStyle: Platform.select({
           ios: {
-           
             position: 'absolute',
+            backgroundColor: colorScheme === 'dark' ? '#121212' : '#FFFFFF', // Dark background for dark mode
           },
-          default: {},
+          android: {
+            backgroundColor: colorScheme === 'dark' ? '#121212' : '#FFFFFF', // Dark background for dark mode
+          },
         }),
       }}>
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol 
+              size={28} 
+              name="house.fill" 
+              color={focused ? '#FFD700' : color} // Yellow when focused
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: 'Notifications',
-          tabBarIcon: ({ color }) => <Ionicons name="notifications-outline" size={24} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="notifications-outline" 
+              size={24} 
+              color={focused ? '#FFD700' : color} // Yellow when focused
+            />
+          )
         }}
       />
-
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name="person" 
+              size={24} 
+              color={focused ? '#FFD700' : color} // Yellow when focused
+            />
+          )
         }}
       />
-
-
       <Tabs.Screen
         name="transaction"
         options={{
           title: 'Transaction',
-          tabBarIcon: ({ color }) => <FontAwesome6 name="money-check" size={24} color="black" />
+          tabBarIcon: ({ color, focused }) => (
+               <FontAwesome6 
+  name="money-bill-transfer" 
+  size={24} 
+  color={focused ? '#FFD700' : color}
+/>
+          )
         }}
       />
-
+  <Tabs.Screen
+  name="History"
+  options={{
+    title: 'History',
+    tabBarIcon: ({ color, focused }) => (
+    <FontAwesome6 
+  name="calendar-check" 
+  size={24} 
+  color={focused ? '#FFD700' : color}
+/>
+    )
+  }}
+/>
     </Tabs>
-
-   
-    
-
   );
 }

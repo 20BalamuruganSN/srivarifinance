@@ -9,10 +9,14 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
@@ -20,7 +24,6 @@ const Profile = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
- 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [errors, setErrors] = useState({ name: '', email: '', phone: '' });
@@ -45,11 +48,9 @@ const Profile = () => {
   };
 
   const saveProfile = async (): Promise<void> => {
-    // Save profile data to AsyncStorage
     try {
       const profileData = { name, email, phone, imageUri };
       await AsyncStorage.setItem('userProfile', JSON.stringify(profileData));
-      // Simulate async save delay if needed
       return new Promise((resolve) => {
         setTimeout(() => {
           console.log('Profile saved', name);
@@ -84,7 +85,7 @@ const Profile = () => {
     return valid;
   };
 
-  const pickImage = async (type: any) => {
+  const pickImage = async (type: string) => {
     let permissionResult;
     let result;
 
@@ -119,16 +120,13 @@ const Profile = () => {
     setModalVisible(false);
   };
 
-  // Your handleUpdate function
   const handleUpdate = async () => {
     console.log('Update button pressed');
     if (!validate()) return;
 
     try {
       await saveProfile();
-
-      // Removed alert, directly route back
-      router.replace('/'); 
+      router.replace('/');
     } catch (error) {
       console.error('Error saving profile:', error);
       Alert.alert('Error', 'Something went wrong while updating profile.');
@@ -137,103 +135,109 @@ const Profile = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-
       <View style={styles.header}>
-         <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>Profile</Text>
       </View>
 
-      {/* Title */}
-      
-      
-
-      <View style={styles.profileContainer}>
-        {/* Profile Image with overlay camera icon */}
-        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.imageWrapper}>
-          <View style={styles.avatarContainer}>
-            <Image
-              source={imageUri ? { uri: imageUri } : require('../assets/images/logo.png')}
-              style={styles.profileImage}
-              resizeMode="cover"
-            />
-            {/* Camera icon overlay */}
-            <View style={styles.cameraIconContainer}>
-              <Ionicons name="camera" size={20} color="#fff" />
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Labels and Inputs with spacing */}
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your name"
-          placeholderTextColor="#999"
-          value={name}
-          onChangeText={setName}
-        />
-        {errors.name ? <Text style={styles.error}>{errors.name}</Text> : null}
-
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your email"
-          placeholderTextColor="#999"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-        />
-        {errors.email ? <Text style={styles.error}>{errors.email}</Text> : null}
-
-        <Text style={styles.label}>Phone</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your phone"
-          placeholderTextColor="#999"
-          value={phone}
-          onChangeText={(text) => {
-            if (text.length <= 10 && /^\d*$/.test(text)) {
-              setPhone(text);
-            }
-          }}
-          keyboardType="phone-pad"
-        />
-        {errors.phone ? <Text style={styles.error}>{errors.phone}</Text> : null}
-
-        {/* Update Button */}
-        <TouchableOpacity style={styles.button} onPress={handleUpdate}>
-          <Text style={styles.buttonText}>Update</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Modal for image options */}
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Choose an Option</Text>
-            <TouchableOpacity style={styles.optionButton} onPress={() => pickImage('camera')}>
-              <Ionicons name="camera" size={20} color="#fff" />
-              <Text style={styles.optionText}>Camera</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionButton} onPress={() => pickImage('gallery')}>
-              <Ionicons name="image" size={20} color="#fff" />
-              <Text style={styles.optionText}>Gallery</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.profileContainer}>
+              <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.imageWrapper}>
+                <View style={styles.avatarContainer}>
+                  <Image
+                    source={imageUri ? { uri: imageUri } : require('../assets/images/logo.png')}
+                    style={styles.profileImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.cameraIconContainer}>
+                    <Ionicons name="camera" size={20} color="#fff" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your name"
+                placeholderTextColor="#999"
+                value={name}
+                onChangeText={setName}
+              />
+              {errors.name ? <Text style={styles.error}>{errors.name}</Text> : null}
+
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                placeholderTextColor="#999"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+              />
+              {errors.email ? <Text style={styles.error}>{errors.email}</Text> : null}
+
+              <Text style={styles.label}>Phone</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your phone"
+                placeholderTextColor="#999"
+                value={phone}
+                onChangeText={(text) => {
+                  if (text.length <= 10 && /^\d*$/.test(text)) {
+                    setPhone(text);
+                  }
+                }}
+                keyboardType="phone-pad"
+              />
+              {errors.phone ? <Text style={styles.error}>{errors.phone}</Text> : null}
+
+              <TouchableOpacity style={styles.button} onPress={handleUpdate}>
+                <Text style={styles.buttonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Modal
+              visible={modalVisible}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setModalVisible(false)}
+            >
+              <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                  <Text style={styles.modalTitle}>Choose an Option</Text>
+                  <TouchableOpacity style={styles.optionButton} onPress={() => pickImage('camera')}>
+                    <Ionicons name="camera" size={20} color="#fff" />
+                    <Text style={styles.optionText}>Camera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.optionButton} onPress={() => pickImage('gallery')}>
+                    <Ionicons name="image" size={20} color="#fff" />
+                    <Text style={styles.optionText}>Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 export default Profile;
+
 
 // Your styles (unchanged)
 const styles = StyleSheet.create({

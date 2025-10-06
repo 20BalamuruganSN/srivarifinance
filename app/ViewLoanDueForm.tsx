@@ -6,73 +6,62 @@ import {
   Platform,
   Animated,
   Alert,
-  TouchableOpacity,
   ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
 } from "react-native";
-import { Button, TextInput, RadioButton } from "react-native-paper";
+import { Button, TextInput } from "react-native-paper";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "./Api";
 
-import { useFocusEffect, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useRoute, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
 
-const ViewLoanDueForm= () => {
+const ViewLoanDueForm = () => {
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
   const [showPaidDatePicker, setShowPaidDatePicker] = useState(false);
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
+  const [showMessage, setShowMessage] = useState(false); // for bottom message
   const route = useRoute();
+  const navigation = useNavigation();
 
-  const { id } = route.params as {
-    id: {
-      collection_by: string | null;
-      created_at: string;
-      due_amount: string;
-      due_date: string;
-      id: number;
-      loan_id: string;
-      next_amount: string;
-      paid_amount: string;
-      paid_on: string | null;
-      pending_amount: string;
-      status: string;
-      updated_at: string;
-      user_id: string;
-      user_name:string
-
-    };
-  };
-console.log("Id ",id)
   const {
-    loan_id,
-    user_id,
-    due_amount,
-    paid_amount,
-    next_amount,
-    due_date,
-    status,
-    user_name,
-  } = id;
+    id: {
+      collection_by,
+      created_at,
+      due_amount,
+      due_date,
+      id,
+      loan_id,
+      next_amount,
+      paid_amount,
+      paid_on,
+      pending_amount,
+      status,
+      updated_at,
+      user_id,
+      user_name,
+    },
+  } = route.params;
 
   const [formData, setFormData] = useState({
     loan_id: loan_id,
     user_id: user_id,
     due_amount: due_amount,
-    collection_by: "",
+    collection_by: collection_by || "",
     due_date: due_date || "Select Date",
-    paid_on: "Select Date",
+    paid_on: paid_on || "Select Date",
     paid_amount: paid_amount,
     status: status,
     user_name: user_name || "",
     next_amount: next_amount,
     future_date: "",
+    pending_amount: pending_amount,
   });
 
-
-  console.log("Cist",user_name)
-  console.log("due_amount",due_amount)
   const [errors, setErrors] = useState({
     loan_id: "",
     user_id: "",
@@ -111,15 +100,23 @@ console.log("Id ",id)
       newErrors.collection_by = "Collector is required";
       valid = false;
     }
+
     if (formData.due_date === "Select Date") {
       newErrors.due_date = "Due date is required";
       valid = false;
     }
-    if (formData.paid_on === "Select Date") {
-      newErrors.paid_on = "Paid date is required";
+
+    // Validate paid_on and paid_amount
+    if (!formData.paid_amount || formData.paid_amount.trim() === "") {
+      newErrors.paid_amount = "Paid amount is required";
       valid = false;
-    } else if (new Date(formData.paid_on) <= new Date()+1) {
-      newErrors.paid_on = "Paid date must be today or in the future";
+    } else if (parseFloat(formData.paid_amount) <= 0) {
+      newErrors.paid_amount = "Paid amount must be greater than 0";
+      valid = false;
+    }
+
+    if (formData.paid_on === "Select Date" || !formData.paid_on) {
+      newErrors.paid_on = "Paid date is required";
       valid = false;
     }
 
@@ -128,80 +125,51 @@ console.log("Id ",id)
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
-
-    const today = new Date();
-    const paidOnDate = new Date(formData.due_date);
-
-    if (paidOnDate > today) {
-      return handleFutureDate();
+    if (!validateForm()) {
+      // Show message at bottom
+      setShowMessage(true);
+      setTimeout(() => setShowMessage(false), 3000);
+      return;
     }
-    setLoading(true);
+
+    // Calculate pending amount
+    const paidAmt = parseFloat(formData.paid_amount);
+    const dueAmt = parseFloat(formData.due_amount);
+    let pendingAmt = dueAmt - paidAmt;
+
+    if (pendingAmt < 0) pendingAmt = 0; // prevent negative
+
+    // Add pending amount to formData for API
+    const updatedData = {
+      ...formData,
+      pending_amount: pendingAmt.toString(),
+    };
+
     try {
-
-
-      const response = await api.put(
-        // `/update-loan-pay/${formData.loan_id}`,
-        `/checkloancategory/${formData.loan_id}`,
-        formData,
-        
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-          //  console.log("customerName",formData)
-
-
+      setLoading(true);
+      const response = await api.put(`/checkloancategory/${formData.loan_id}`, updatedData, {
+        headers: { "Content-Type": "application/json" },
+      });
 
       if (response.status === 200) {
         setVisible(true);
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 3000,
+          duration: 1000,
           useNativeDriver: true,
-        }).start();
-        
+        }).start(() => {
+          setTimeout(() => {
+            setVisible(false);
+            navigation.goBack(); // Navigate back to ViewLoanDue page
+          }, 2000);
+        });
       } else {
-        Alert.alert("Error", "Failed to add loan due information.");
+        Alert.alert("Error", response.data.message || "Failed to update");
       }
     } catch (error: any) {
-      Alert.alert("Error", "Failed to add loan due information.");
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  const handleFutureDate = async () => {
-    
-   
-    const updatedFormData = { ...formData, future_date: formData.due_date };
-     setLoading(true);
-    try {
-
-      const response = await api.put(
-        `/checkloancategory/${updatedFormData.loan_id}`,
-        updatedFormData,
-        
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.status === 200) {
-        setVisible(true);
-        Alert.alert("Success", "Loan added successfully!");
-        // router.replace('/ViewLoanDue')
-      } else {
-        Alert.alert("Error", "Failed to update future date.");
-      }
-    } catch (error: any) {
-      Alert.alert("Alert", "First work on unpaid record.");
-    }
-    finally{
+      console.error("Error:", error);
+      Alert.alert("Error", error.response?.data?.error || "Server Error");
+    } finally {
       setLoading(false);
     }
   };
@@ -227,6 +195,7 @@ console.log("Id ",id)
     return `${year}-${month}-${day}`;
   };
 
+  // Fetch collection_by on mount
   useEffect(() => {
     const fetchRole = async () => {
       const storedRole = await AsyncStorage.getItem("userid");
@@ -238,147 +207,146 @@ console.log("Id ",id)
   }, []);
 
   return (
-    <ScrollView>
-      <View style={styles.container}>
-      
-        <TextInput
-          mode="outlined"
-          value={formData.loan_id}
-          label="Loan ID"
-          editable={false}
-          style={styles.input}
-        />
-        {errors.loan_id && (
-          <Text style={styles.errorText}>{errors.loan_id}</Text>
-        )}
-
-        <TextInput
-          mode="outlined"
-          value={formData.user_id}
-          label="Customer ID"
-          editable={false}
-          style={styles.input}
-        />
-        {errors.user_id && (
-          <Text style={styles.errorText}>{errors.user_id}</Text>
-        )}
-
-        <TextInput
-          mode="outlined"
-          value={formData.user_name }
-          label="Customer Name"
-          style={styles.input}
-          // onChangeText={(value) => handleInputChange("customer_name", value)}
-
-          // editable={true}
-        />
-
-        <TextInput
-          mode="outlined"
-          value={formData.next_amount || formData.due_amount  }
-          keyboardType="numeric"
-          label="Due Amount"
-          style={styles.input}
-          onChangeText={(value) => handleInputChange("due_amount", value)}
-        />
-        {errors.due_amount && (
-          <Text style={styles.errorText}>{errors.due_amount}</Text>
-        )}
-
-        <TextInput
-          mode="outlined"
-          value={formData.paid_amount}
-          keyboardType="numeric"
-          label="Paid Amount"
-          style={styles.input}
-          onChangeText={(value) => handleInputChange("paid_amount", value)}
-        />
-        {errors.paid_amount && (
-          <Text style={styles.errorText}>{errors.paid_amount}</Text>
-        )}
-
-        <View style={styles.dateContainer}>
-          <TextInput
-            mode="outlined"
-            label="Due Date"
-            value={formData.due_date.split('T')[0]}
-            editable={false}
-            style={styles.inputdate}
-          />
-          <Button
-            mode="outlined"
-            onPress={() => setShowDueDatePicker(true)}
-            style={styles.button}
-          >
-            Select Due Date
-          </Button>
-          {showDueDatePicker && (
-            <DateTimePicker
-              value={new Date()}
-              mode="date"
-              display="default"
-              onChange={onDueDateChange}
-            />
-          )}
-        </View>
-        {errors.due_date && (
-          <Text style={styles.errorText}>{errors.due_date}</Text>
-        )}
-    
-        <View style={styles.dateContainer}>
-          <TextInput
-            mode="outlined"
-            label="Paid Date"
-            value={formData.paid_on}
-            editable={false}
-            style={styles.inputdate}
-          />
-          <Button
-            mode="outlined"
-            onPress={() => setShowPaidDatePicker(true)}
-            style={styles.button}
-          >
-            Select Paid Date
-          </Button>
-          {showPaidDatePicker && (
-            <DateTimePicker
-              value={new Date()}
-              mode="date"
-              display="default"
-              onChange={onPaidDateChange}
-            />
-          )}
-        </View>
-        {errors.paid_on && (
-          <Text style={styles.errorText}>{errors.paid_on}</Text>
-        )}
-        <TextInput
-          mode="outlined"
-          label="Collected By"
-          value={formData.collection_by}
-          style={styles.input}
-          onChangeText={(value) => handleInputChange("collection_by", value)}
-        />
-        {errors.collection_by && (
-          <Text style={styles.errorText}>{errors.collection_by}</Text>
-        )}
-
-        {visible && (
-          <Animated.View style={[styles.popup, { opacity: fadeAnim }]}>
-            <Text style={styles.popupText}>Loan Due Created!</Text>
-          </Animated.View>
-        )}
-
-        <Button
-          mode="contained"
-          onPress={handleSubmit}
-          style={styles.submitButton}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
         >
-          Add Due
-        </Button>
-        
-      </View>
-    </ScrollView>
+          <View style={styles.container}>
+            <TextInput
+              mode="outlined"
+              value={formData.loan_id}
+              label="Loan ID"
+              editable={false}
+              style={styles.input}
+            />
+            <TextInput
+              mode="outlined"
+              value={formData.user_id}
+              label="Customer ID"
+              editable={false}
+              style={styles.input}
+            />
+            <TextInput
+              mode="outlined"
+              value={formData.user_name}
+              label="Customer Name"
+              style={styles.input}
+            />
+
+            <TextInput
+              mode="outlined"
+              value={formData.next_amount || formData.due_amount}
+              keyboardType="numeric"
+              label="Due Amount"
+              style={styles.input}
+              onChangeText={(value) => handleInputChange("due_amount", value)}
+            />
+
+            <TextInput
+              mode="outlined"
+              value={formData.paid_amount}
+              keyboardType="numeric"
+              label="Paid Amount"
+              style={styles.input}
+              onChangeText={(value) => handleInputChange("paid_amount", value)}
+            />
+            {errors.paid_amount ? (
+              <Text style={styles.errorText}>{errors.paid_amount}</Text>
+            ) : null}
+
+            {/* Due Date Picker */}
+            <View style={styles.dateContainer}>
+              <TextInput
+                mode="outlined"
+                label="Due Date"
+                value={formData.due_date.split("T")[0]}
+                editable={false}
+                style={styles.inputdate}
+              />
+              <Button
+                mode="outlined"
+                onPress={() => setShowDueDatePicker(true)}
+                style={styles.button}
+              >
+                Select Due Date
+              </Button>
+              {showDueDatePicker && (
+                <DateTimePicker
+                  value={new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={onDueDateChange}
+                />
+              )}
+            </View>
+
+            {/* Paid Date Picker */}
+            <View style={styles.dateContainer}>
+              <TextInput
+                mode="outlined"
+                label="Paid Date"
+                value={formData.paid_on}
+                editable={false}
+                style={styles.inputdate}
+              />
+              <Button
+                mode="outlined"
+                onPress={() => setShowPaidDatePicker(true)}
+                style={styles.button}
+              >
+                Select Paid Date
+              </Button>
+              {showPaidDatePicker && (
+                <DateTimePicker
+                  value={new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={onPaidDateChange}
+                />
+              )}
+            </View>
+            {errors.paid_on ? (
+              <Text style={styles.errorText}>{errors.paid_on}</Text>
+            ) : null}
+
+            <TextInput
+              mode="outlined"
+              label="Collected By"
+              value={formData.collection_by}
+              style={styles.input}
+              onChangeText={(value) => handleInputChange("collection_by", value)}
+            />
+
+            {visible && (
+              <Animated.View style={[styles.popup, { opacity: fadeAnim }]}>
+                <Text style={styles.popupText}>Loan Due Updated Successfully!</Text>
+              </Animated.View>
+            )}
+
+            {/* Bottom message for missing fields */}
+            {showMessage && (
+              <View style={styles.bottomMessageContainer}>
+                <Text style={styles.bottomMessageText}>Please fill all required fields</Text>
+              </View>
+            )}
+
+            <Button
+              mode="contained"
+              onPress={handleSubmit}
+              style={styles.submitButton}
+              loading={loading}
+            >
+              Update Due
+            </Button>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -386,10 +354,11 @@ export default ViewLoanDueForm;
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#07387A",
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+    paddingBottom: 160,
   },
   headerText: {
     fontSize: 20,
@@ -401,6 +370,7 @@ const styles = StyleSheet.create({
     width: 300,
     backgroundColor: "navy",
     padding: 5,
+    marginTop: 20,
   },
   input: {
     height: 50,
@@ -424,11 +394,6 @@ const styles = StyleSheet.create({
     textAlign: "left",
     alignSelf: "flex-start",
   },
-  radioGroup: {
-    flexDirection: "row",
-    padding: 10,
-    alignItems: "center",
-  },
   overlay: {
     position: "absolute",
     top: 0,
@@ -451,16 +416,31 @@ const styles = StyleSheet.create({
     marginRight: 20,
   },
   popup: {
-    marginTop: 10,
+    position: 'absolute',
+    top: 20,
     backgroundColor: "navy",
-    padding: 10,
+    padding: 15,
     borderRadius: 10,
-    bottom:10,
+    alignSelf: 'center',
+    zIndex: 1000,
   },
   popupText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bottomMessageContainer: {
+    position: 'absolute',
+    bottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  bottomMessageText: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 10,
+    borderRadius: 8,
+    color: 'red',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
-
-

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, Button, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Button, StyleSheet, FlatList, TouchableOpacity, LayoutAnimation, Platform, UIManager, ScrollView, BackHandler } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useNavigationContainerRef } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 if (
   Platform.OS === 'android' &&
@@ -40,30 +41,69 @@ export default function PendingList() {
   const [showToPicker, setShowToPicker] = useState(false);
   const Navigation = useNavigation();
 
+  const router = useRouter();
+  const [canGoBack, setCanGoBack] = useState(false);
+  const navigationRef = useNavigationContainerRef(); 
+
   const [pendingLoans, setPendingLoans] = useState<LoanResponse | null>(null);
   const [unpaidLoans, setUnpaidLoans] = useState<LoanResponse | null>(null);
 
   const [expandedPendingIds, setExpandedPendingIds] = useState<Set<number>>(new Set());
   const [expandedUnpaidIds, setExpandedUnpaidIds] = useState<Set<number>>(new Set());
 
-  // Format date to yyyy-mm-dd for backend
-  const formatDate = (date: Date) => {
+  // ✅ Format date to yyyy-mm-dd for backend
+  const formatDateForAPI = (date: Date) => {
     return date.toISOString().split('T')[0];
   };
+
+  // ✅ Format date to dd-mm-yyyy for display
+  const formatDateDisplay = (dateInput: string | Date) => {
+    const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+  useEffect(() => {
+    const backAction = () => {
+      if (canGoBack) {
+        router.back();
+      } else {
+        router.replace("/");
+      }
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCanGoBack(navigationRef.canGoBack());
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // API call function
   const fetchLoans = async () => {
     try {
       const response = await fetch(
-        `http://192.168.1.20:8000/api/pending-loans-with-user-city`,
+        `https://reiosglobal.com/srivarimob/api/pending-loans-with-user-city`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from_date: formatDate(fromDate),
-            to_date: formatDate(toDate),
+            from_date: formatDateForAPI(fromDate),
+            to_date: formatDateForAPI(toDate),
           }),
         }
       );
@@ -76,7 +116,7 @@ export default function PendingList() {
 
       setPendingLoans(json.pending);
       setUnpaidLoans(json.unpaid);
-    } catch (error) {
+    } catch (error:any) {
       alert('Error fetching data: ' + error.message);
     }
   };
@@ -98,7 +138,7 @@ export default function PendingList() {
     setExpandedUnpaidIds(newSet);
   };
 
-  // Render loan item with listType to generate unique key
+  // Render loan item
   const renderLoanItem = (
     item: Loan,
     expandedIds: Set<number>,
@@ -113,7 +153,7 @@ export default function PendingList() {
       >
         <Text style={styles.cardTitle}>{item.user_name} - {item.city_name}</Text>
         <Text style={styles.statusText}>Status: {item.status}</Text>
-        <Text style={styles.dateText}>Due Date: {item.due_date}</Text>
+        <Text style={styles.dateText}>Due Date: {formatDateDisplay(item.due_date)}</Text>
         <Text style={styles.amountText}>Due Amount: ₹{(Number(item.due_amount) || 0).toFixed(2)}</Text>
 
         {expanded && (
@@ -122,12 +162,11 @@ export default function PendingList() {
             <Text>Next Amount: ₹{(Number(item.next_amount) || 0).toFixed(2)}</Text>
             <Text>Pending Amount: ₹{(Number(item.pending_amount) || 0).toFixed(2)}</Text>
             <Text>Paid Amount: ₹{(Number(item.paid_amount) || 0).toFixed(2)}</Text>
-            <Text>Paid On: {item.paid_on || 'Not Paid Yet'}</Text>
+            <Text>Paid On: {item.paid_on ? formatDateDisplay(item.paid_on) : 'Not Paid Yet'}</Text>
             <Text>Collection By: {item.collection_by || '-'}</Text>
-            <Text>Created At: {new Date(item.created_at).toLocaleString()}</Text>
-            <Text>Updated At: {new Date(item.updated_at).toLocaleString()}</Text>
+            <Text>Created At: {formatDateDisplay(item.created_at)}</Text>
+            <Text>Updated At: {formatDateDisplay(item.updated_at)}</Text>
 
-            {/* View Dues button styled with yellow background */}
             <TouchableOpacity
               style={styles.viewDuesButton}
               onPress={() => Navigation.navigate('ViewLoanDue', { id: item.loan_id })}
@@ -153,7 +192,7 @@ export default function PendingList() {
             style={styles.dateButton}
             onPress={() => setShowFromPicker(true)}
           >
-            <Text style={styles.dateButtonText}>{formatDate(fromDate)}</Text>
+            <Text style={styles.dateButtonText}>{formatDateDisplay(fromDate)}</Text>
           </TouchableOpacity>
           {showFromPicker && (
             <DateTimePicker
@@ -174,7 +213,7 @@ export default function PendingList() {
             style={styles.dateButton}
             onPress={() => setShowToPicker(true)}
           >
-            <Text style={styles.dateButtonText}>{formatDate(toDate)}</Text>
+            <Text style={styles.dateButtonText}>{formatDateDisplay(toDate)}</Text>
           </TouchableOpacity>
           {showToPicker && (
             <DateTimePicker
@@ -247,8 +286,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#001f3f',
     padding: 16,
     paddingTop: 50,
+    paddingBottom:160
   },
-  // Header style
   header: {
     alignItems: 'center',
     marginBottom: 20,
@@ -261,7 +300,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  // Date pickers row
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

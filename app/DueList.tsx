@@ -4,6 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from "expo-router";
 
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 
 type Loan = {
   loan_id: number;
@@ -33,6 +34,7 @@ export default function DueList() {
 const [page, setPage] = useState(1);
 const [totalPages, setTotalPages] = useState(1); // from backend
 
+const isFocused = useIsFocused();
 
   // Animated icon spin
   const spinValue = useRef(new Animated.Value(0)).current;
@@ -74,6 +76,12 @@ const [totalPages, setTotalPages] = useState(1); // from backend
     fetchLoans();
   }, [selectedDate]);
 
+  useEffect(() => {
+  if (isFocused) {
+    fetchLoans(1); // 👈 refresh data when screen is focused
+  }
+}, [isFocused]);
+
   const handleDateChange = (_event: any, date?: Date) => {
     if (Platform.OS === 'android') setShowPicker(false);
     if (date) setSelectedDate(date);
@@ -110,7 +118,7 @@ const fetchLoans = async (requestedPage = 1) => {
     const limit = 20;
 
     const response = await fetch(
-      `http://192.168.1.20:8000/api/fetchCitiesWithDueLoansArray?date=${dateStr}&page=${requestedPage}&limit=${limit}`
+      `https://reiosglobal.com/srivarimob/api/fetchCitiesWithDueLoansArray?date=${dateStr}&page=${requestedPage}&limit=${limit}`
     );
     const json = await response.json();
 
@@ -164,14 +172,15 @@ useEffect(() => {
       <TouchableOpacity style={styles.dateButton} onPress={() => setShowPicker(true)}>
         <Text style={styles.dateButtonText}>Select Date</Text>
       </TouchableOpacity>
-      {showPicker && (
-        <DateTimePicker
-          value={selectedDate}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-        />
-      )}
+     {showPicker && (
+  <DateTimePicker
+    value={selectedDate}
+    mode="date"
+    display="default"
+    minimumDate={new Date()} // disables past dates
+    onChange={handleDateChange}
+  />
+)}
 
       {/* Loader with animated icon */}
       {loading ? (
@@ -210,7 +219,9 @@ useEffect(() => {
       </View>
     </TouchableOpacity>
   )}
+   contentContainerStyle={{ paddingBottom: 100 }}
   onEndReachedThreshold={0.5}
+  
   onEndReached={() => {
     if (page < totalPages && !loading) {
       fetchLoans(page + 1);

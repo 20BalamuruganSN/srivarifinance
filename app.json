@@ -3,13 +3,9 @@
     "name": "srivarifinance",
     "slug": "srivarifinance",
     "version": "1.0.0",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
+    "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/final-app-logo.png",
     "scheme": "srivarifinance",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,22 +14,24 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/final-app-logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.balamurugan15.srivarifinance",
+      "useCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/final-app-logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/final-app-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -46,8 +44,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "250b4234-61df-409c-b4dd-9a28254285db"
+        "projectId": "e0e7e61e-457f-49a0-9848-c7746af11d7b"
       }
-    }
+    },
+    "owner": "balamurugan15"
   }
 }

@@ -5,14 +5,11 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-
-
 import { Badge } from 'react-native-paper';
 import api from './Api';
-import { router } from 'expo-router';
 
 interface NotificationItem {
   id: number;
@@ -30,8 +27,8 @@ const Notification = () => {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await api.get('/get_Notifications');
-        console.log('notification full response:', response.data);
+        const response = await api.get('/notifications');
+        // console.log('notification full response:', response.data);
         const data = response.data;
         const notifList: NotificationItem[] = Array.isArray(data)
           ? data
@@ -49,8 +46,7 @@ const Notification = () => {
 
   const markAsRead = async (id: number) => {
     try {
-    
-      await api.post(`/mark-as-read/${id}`);
+      await api.post(`/notifications/mark-as-read/${id}`);
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, is_read: 1 } : n))
       );
@@ -61,9 +57,26 @@ const Notification = () => {
 
   const deleteNotification = async (id: number) => {
     try {
-      // Adjust the API route to match your backend
-      await api.delete(`/notifications/${id}`);
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Show confirmation dialog before deleting
+      Alert.alert(
+        'Delete Notification',
+        'Are you sure you want to delete this notification?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await api.delete(`/notifications/${id}`);
+              setNotifications(prev => prev.filter(n => n.id !== id));
+            },
+          },
+        ],
+        { cancelable: true }
+      );
     } catch (error) {
       console.error('Failed to delete notification:', error);
     }
@@ -73,32 +86,16 @@ const Notification = () => {
 
   return (
     <View style={styles.container}>
-      {/* <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/')}>
-          <Ionicons name="arrow-back" size={28} color="#fff" />
-        </TouchableOpacity>
-
+      <View style={styles.header}>
+        <Text style={styles.title}>Notifications</Text>
         <View style={{ position: 'relative' }}>
           <Ionicons name="notifications" size={30} color="#fff" />
           {unreadCount > 0 && (
             <Badge style={styles.badge}>{unreadCount}</Badge>
           )}
         </View>
-      </View> */}
+      </View>
 
-      <View style={styles.header}>
-  <Text style={styles.title}>Notifications</Text>
-
-  <View style={{ position: 'relative' }}>
-    <Ionicons name="notifications" size={30} color="#fff" />
-    {unreadCount > 0 && (
-      <Badge style={styles.badge}>{unreadCount}</Badge>
-    )}
-  </View>
-</View>
-
-
-     
       {notifications.length === 0 ? (
         <Text style={styles.noNotification}>No notifications to show.</Text>
       ) : (
@@ -134,15 +131,12 @@ const Notification = () => {
                       <Text style={styles.buttonText}>Mark as Read</Text>
                     </TouchableOpacity>
                   )}
-                 <TouchableOpacity
-  style={styles.deleteButton}
-  onPress={() => deleteNotification(item.id)}
->
-  <Ionicons name="trash" size={24} color="red" />
-
-</TouchableOpacity>
-
-
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteNotification(item.id)}
+                  >
+                    <Ionicons name="trash" size={24} color="red" />
+                  </TouchableOpacity>
                 </View>
               </View>
             );
@@ -161,53 +155,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#07387A', 
     padding: 16,
   },
-  //  header: {
-  //   flexDirection: 'row',
-  //   alignItems: 'center',
-  //   justifyContent: 'space-between',
-  // },
-  // badge: {
-  //   backgroundColor: '#ff3d00',
-  //   color: '#fff',
-  //   fontSize: 12,
-  //   position: 'absolute',
-  //   top: -5,
-  //   right: -10,
-  // },
-  // title: {
-  //   fontSize: 24,
-  //   fontWeight: 'bold',
-  //   color: '#ffffff',
-  //   marginLeft:80,
-  //   top:-30,
-  //   marginBottom: 10,
-  // },
-
   header: {
-     padding:36,
+    padding: 36,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  backgroundColor: '#07387A', 
-},
-
-title: {
-  fontSize: 24,
-  fontWeight: 'bold',
-  color: '#ffffff',
-},
-
-badge: {
-  backgroundColor: '#ff3d00',
-  color: '#fff',
-  fontSize: 12,
-  position: 'absolute',
-  top: -5,
-  right: -10,
-  paddingHorizontal: 6,
-  borderRadius: 8,
-},
-
+    backgroundColor: '#07387A', 
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  badge: {
+    backgroundColor: '#ff3d00',
+    color: '#fff',
+    fontSize: 12,
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
   noNotification: {
     textAlign: 'center',
     marginTop: 50,
@@ -226,19 +195,17 @@ badge: {
     shadowRadius: 4,
   },
   readCard: {
-    backgroundColor: '#1e3a66', // lighter version of card for read
+    backgroundColor: '#1e3a66',
   },
   headerCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
- 
   titleCard: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#ffffff',
-   
   },
   message: {
     fontSize: 14,
@@ -264,7 +231,6 @@ badge: {
     marginRight: 10,
   },
   deleteButton: {
-    // backgroundColor: '#e53935', 
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,

@@ -6,13 +6,17 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  ScrollView,
   TextInput,
   StatusBar,
+  BackHandler,
 } from "react-native";
 import { Avatar } from "react-native-paper";
 import AntDesign from "@expo/vector-icons/AntDesign";
-import { router, useNavigation } from "expo-router";
+import { router, useNavigation, useNavigationContainerRef, useRouter } from "expo-router";
 import { useFocusEffect } from '@react-navigation/native';
+import { useColorScheme } from 'react-native';  // For detecting dark/light mode
+import { DefaultTheme, DarkTheme } from '@react-navigation/native';  // For theme colors
 
 import api from "./Api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,6 +28,45 @@ const Employees = () => {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("All"); // All, Active, Inactive
   const navigation = useNavigation();
+  
+
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
+
+
+   const router = useRouter();
+     const [canGoBack, setCanGoBack] = useState(false);
+     
+       const navigationRef = useNavigationContainerRef();
+     
+       useEffect(() => {
+         const backAction = () => {
+           if (canGoBack) {
+             router.back();
+           } else {
+             router.replace("/");
+           }
+           return true;
+         };
+     
+         const backHandler = BackHandler.addEventListener(
+           "hardwareBackPress",
+           backAction
+         );
+     
+         return () => backHandler.remove();
+       }, [router]);
+     
+       // Track history on mount
+       useEffect(() => {
+         const timer = setTimeout(() => {
+           setCanGoBack(navigationRef.canGoBack());
+         }, 200);
+     
+         return () => clearTimeout(timer);
+       }, []);
+     
+   
 
   useEffect(() => {
     const fetchRole = async () => {
@@ -60,6 +103,18 @@ const Employees = () => {
   const handleNavigate = () => {
     router.replace('/CreateEmployees');
   };
+
+
+  const allEmployeeCount = Array.isArray(data) ? data.length : 0;
+
+const activeEmployeeCount = (Array.isArray(data) ? data : []).filter(
+  (item) => (item.status || "").trim().toLowerCase() === "active"
+).length;
+
+const inactiveEmployeeCount = (Array.isArray(data) ? data : []).filter(
+  (item) => (item.status || "").trim().toLowerCase() === "inactive"
+).length;
+
 
   // Filter data based on search and status filter
 const filteredData = (Array.isArray(data) ? data : []).filter((item) => {
@@ -123,7 +178,14 @@ const matchesSearch =
     <SafeAreaView style={{ flex: 1, backgroundColor: "#001f3f" }}>
       <StatusBar barStyle="light-content" />
 
-      <View style={styles.headerContainer}>
+  <View style={styles.headerContainer}>
+
+     <View style={styles.filterButtonsContainer}>
+                    <ScrollView
+                      horizontal={true}
+                      showsHorizontalScrollIndicator={true}
+                      contentContainerStyle={styles.filterButtonsContent}
+                    >
   <TouchableOpacity
     style={[
       styles.filterButton,
@@ -131,7 +193,8 @@ const matchesSearch =
     ]}
     onPress={() => setFilter("All")}
   >
-    <Text style={styles.filterText}>All Employees</Text>
+    {/* <Text style={styles.filterText}>All Employees</Text> */}
+     <Text style={styles.filterText}>All Employees ({allEmployeeCount})</Text>
   </TouchableOpacity>
 
   <TouchableOpacity
@@ -141,7 +204,8 @@ const matchesSearch =
     ]}
     onPress={() => setFilter("Active")}
   >
-    <Text style={styles.filterText}>Active</Text>
+    {/* <Text style={styles.filterText}>Active</Text> */}
+     <Text style={styles.filterText}>Active ({activeEmployeeCount})</Text>
   </TouchableOpacity>
 
   <TouchableOpacity
@@ -151,39 +215,52 @@ const matchesSearch =
     ]}
     onPress={() => setFilter("Inactive")}
   >
-    <Text style={styles.filterText}>Inactive</Text>
+    {/* <Text style={styles.filterText}>Inactive</Text> */}
+     <Text style={styles.filterText}>Inactive ({inactiveEmployeeCount})</Text>
   </TouchableOpacity>
+  </ScrollView>
+    </View>
 </View>
 
 
       {/* Search and Add Button */}
-      <View style={styles.searchAndButtonContainer}>
-        <View style={styles.searchContainer}>
-          <TextInput
-            placeholder="Enter employee name"
-            style={styles.searchInput}
-            onChangeText={setSearchQuery}
-            value={searchQuery}
-          />
-        </View>
-        <TouchableOpacity style={styles.addButton} onPress={handleNavigate}>
-          <AntDesign name="addusergroup" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
-   
+ <View style={styles.searchAndButtonContainer}>
+  <View style={styles.searchContainer}>
+    <TextInput
+      placeholder="Enter Employee Name or ID"
+      placeholderTextColor={colorScheme === 'dark' ? '#999' : '#888'}  // Placeholder remains gray
+      style={[
+        styles.searchInput,
+        {
+          color: 'black',  // <-- FORCED BLACK TEXT (when typing)
+          backgroundColor: 'white',  // <-- FORCED WHITE BACKGROUND
+        }
+      ]}
+      onChangeText={setSearchQuery}
+      value={searchQuery}
+    />
+  </View>
+  <TouchableOpacity style={styles.addButton} onPress={handleNavigate}>
+    <AntDesign name="addusergroup" size={24} color="white" />
+  </TouchableOpacity>
+</View>
       {/* Employee List */}
       <FlatList
-        data={filteredData}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.user_id.toString()}
-        style={styles.list}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={{ color: 'white' }}>No employees found</Text>
-          </View>
-        }
-      />
+  data={filteredData}
+  renderItem={renderItem}
+  keyExtractor={(item) => item.user_id.toString()}
+  style={styles.list}
+  contentContainerStyle={[
+    filteredData.length === 0 && { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    { paddingBottom: 160 }  // paddingBottom added here
+  ]}
+  ListEmptyComponent={
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyText}>No employees found</Text>
+    </View>
+  }
+/>
+
     </SafeAreaView>
   );
 };
@@ -197,11 +274,26 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingHorizontal: 10,
   },
+   filterButtonsContent: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 10,
+  gap: 10, 
+},
+
+  filterButtonsContainer: {
+    flexDirection: "row",
+    // flexWrap: "wrap",
+    justifyContent: "space-evenly",
+    marginTop: 15,
+  },
    filterButton: {
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 25,
     marginHorizontal: 5,
+    borderWidth: 1,
+    borderColor: "white",
   },
   filterText: {
     color: 'white',
@@ -227,23 +319,28 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   searchContainer: {
-    flex: 1,
+      flex: 1,
     backgroundColor: "white",
     borderRadius: 8,
-    marginRight: 10,
   },
   searchInput: {
-    height: 40,
-    paddingHorizontal: 10,
+    height: 55,
+    fontWeight:'bold',
+    paddingHorizontal: 30,
+     borderRadius: 8,
   },
   addButton: {
     backgroundColor: "#07387A",
     borderRadius: 50,
     padding: 10,
+    marginLeft: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
   list: {
     flex: 1,
     width: "100%",
+   
   },
   listItem: {
     flexDirection: "row",
@@ -251,6 +348,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#444",
+    
   },
   avatarContainer: {
     position: "relative",
@@ -296,6 +394,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 50,
+    
   },
 });
 

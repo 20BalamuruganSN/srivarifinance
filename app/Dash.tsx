@@ -22,6 +22,8 @@ import PendingList from "./PendingList";
 import DueList from "./DueList";
 import Home from "./Home";
 import Employees from "./Employees";
+import LoanHistoryScreen from "./(tabs)/History";
+import SimpleInterestCalculator from "./LoanCalculatorScreen";
 
 const Drawer = createDrawerNavigator();
 
@@ -32,6 +34,7 @@ const menuItems = [
   { label: "Loans", icon: "credit-card", route: "ViewLoan" },
   { label: "Due List", icon: "list", route: "DueList" },
   { label: "Pending Due", icon: "clock", route: "PendingList" },
+  { label: "Calculator", icon: "calculator", route: "Calculator" },
 ];
 
 type Props = {
@@ -45,10 +48,11 @@ const CustomDrawerContent = (props: Props) => {
     phone: "",
     imageUri: null,
   });
-  const [role, setRole] = useState<string | null>(null); // Store role here
+  const [role, setRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Load profile and role from AsyncStorage
-  const loadProfileAndRole = async () => {
+  // Load profile, role and user ID from AsyncStorage
+  const loadProfileData = async () => {
     try {
       const savedProfile = await AsyncStorage.getItem("userProfile");
       if (savedProfile) {
@@ -58,25 +62,22 @@ const CustomDrawerContent = (props: Props) => {
           phone: parsedProfile.phone || "",
           imageUri: parsedProfile.imageUri || null,
         });
-      } else {
-        setProfile({ name: "", phone: "", imageUri: null });
       }
 
       const storedRole = await AsyncStorage.getItem("role");
-      if (storedRole) {
-        setRole(storedRole);
-      } else {
-        setRole(null);
-      }
+      setRole(storedRole);
+
+      const storedUserId = await AsyncStorage.getItem("userid");
+      setUserId(storedUserId);
     } catch (err) {
-      console.error("Failed to load profile or role:", err);
+      console.error("Failed to load profile data:", err);
     }
   };
 
-  // Reload profile and role when drawer is focused
+  // Reload profile data when drawer is focused
   useFocusEffect(
     useCallback(() => {
-      loadProfileAndRole();
+      loadProfileData();
     }, [])
   );
 
@@ -103,7 +104,9 @@ const CustomDrawerContent = (props: Props) => {
         </View>
         <View style={styles.profileDetails}>
           <Text style={styles.profileName}>{profile.name || "Guest User"}</Text>
+
           <Text style={styles.profilePhone}>{profile.phone || "No phone"}</Text>
+          {userId && <Text style={styles.userIdText}>ID: {userId}</Text>}
         </View>
       </View>
 
@@ -140,7 +143,10 @@ const CustomDrawerContent = (props: Props) => {
           onPress={async () => {
             try {
               await AsyncStorage.clear();
-              Alert.alert("Logged out", "You have been successfully logged out.");
+              Alert.alert(
+                "Logged out",
+                "You have been successfully logged out."
+              );
               props.navigation.reset({ index: 0, routes: [{ name: "Login" }] });
             } catch (error) {
               console.error(error);
@@ -221,11 +227,17 @@ export default function App() {
         options={{ headerTitle: "Loan" }}
       />
 
-      {/* <Drawer.Screen
-        name="Employee List"
-        component={Manage}
-        options={{ headerTitle: "Employees" }}
-      /> */}
+      <Drawer.Screen
+        name="LoanHistoryScreen"
+        component={LoanHistoryScreen}
+        options={{ headerTitle: "LoanHistoryScreen" }}
+      />
+
+      <Drawer.Screen
+        name="Calculator"
+        component={SimpleInterestCalculator}
+        options={{ headerTitle: "Loan Calculator" }}
+      />
     </Drawer.Navigator>
   );
 }
@@ -270,6 +282,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     color: "white",
+  },
+  userIdText: {
+    fontSize: 14,
+    color: "white",
+    marginVertical: 2,
   },
   profilePhone: {
     fontSize: 14,

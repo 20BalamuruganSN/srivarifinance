@@ -118,9 +118,10 @@ export default VerifyScreen;
 
 const styles = StyleSheet.create({
 
+
    logoCircleContainer: {
     alignItems: "center",
-    marginBottom: 100,
+    marginBottom: 80,
   },
   circle: {
     width: 150,

@@ -4,14 +4,16 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  BackHandler,
 } from "react-native";
 import {  Searchbar } from "react-native-paper";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { Avatar } from "react-native-paper";
-import { useRouter, useFocusEffect } from "expo-router"; 
+import { useRouter, useFocusEffect, useNavigationContainerRef } from "expo-router"; 
 
 import api from "./Api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -25,6 +27,43 @@ const Customer = () => {
   const [statusFilter, setStatusFilter] = useState("All");
   const router = useRouter();
  const Drawer = createDrawerNavigator();
+
+ 
+ 
+ 
+ 
+   const [canGoBack, setCanGoBack] = useState(false);
+   
+     const navigationRef = useNavigationContainerRef();
+   
+     useEffect(() => {
+       const backAction = () => {
+         if (canGoBack) {
+           router.back();
+         } else {
+           router.replace("/");
+         }
+         return true;
+       };
+   
+       const backHandler = BackHandler.addEventListener(
+         "hardwareBackPress",
+         backAction
+       );
+   
+       return () => backHandler.remove();
+     }, [router]);
+   
+     // Track history on mount
+     useEffect(() => {
+       const timer = setTimeout(() => {
+         setCanGoBack(navigationRef.canGoBack());
+       }, 200);
+   
+       return () => clearTimeout(timer);
+     }, []);
+   
+ 
 
   // Fetch role from AsyncStorage on component mount
   useEffect(() => {
@@ -41,6 +80,7 @@ const Customer = () => {
       fetchData();
     }, [statusFilter]) // refetch when filter changes
   );
+  
 
 
   // Fetch customer data from API
@@ -70,6 +110,15 @@ const Customer = () => {
   const handleCancelSearch = () => {
     setSearchQuery("");
   };
+
+
+  const allCount = Array.isArray(data) ? data.length : 0;
+const activeCount = (Array.isArray(data) ? data : []).filter(
+  (item) => (item.status || "").trim().toLowerCase() === "active"
+).length;
+const inactiveCount = (Array.isArray(data) ? data : []).filter(
+  (item) => (item.status || "").trim().toLowerCase() === "inactive"
+).length;
 
 
 const filteredData = (Array.isArray(data) ? data : []).filter((item) => {
@@ -139,12 +188,19 @@ onPress={() => {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1,backgroundColor: "#001f3f"  }}>
      
 
       <View style={styles.container}>
         {/* Filter Buttons */}
         <View style={styles.headerContainer}>
+
+           <View style={styles.filterButtonsContainer}>
+                <ScrollView
+                  horizontal={true}
+                  showsHorizontalScrollIndicator={true}
+                  contentContainerStyle={styles.filterButtonsContent}
+                >
           <TouchableOpacity
             style={[
               styles.filterButton,
@@ -152,7 +208,8 @@ onPress={() => {
             ]}
             onPress={() => setStatusFilter("All")}
           >
-            <Text style={styles.filterText}>All Customer</Text>
+               <Text style={styles.filterText}>All Customer ({allCount})</Text>
+            {/* <Text style={styles.filterText}>All Customer</Text> */}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -162,7 +219,9 @@ onPress={() => {
             ]}
             onPress={() => setStatusFilter("Active")}
           >
-            <Text style={styles.filterText}>Active</Text>
+            
+    <Text style={styles.filterText}>Active ({activeCount})</Text>
+            {/* <Text style={styles.filterText}>Active</Text> */}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -172,8 +231,12 @@ onPress={() => {
             ]}
             onPress={() => setStatusFilter("Inactive")}
           >
-            <Text style={styles.filterText}>Inactive</Text>
+
+               <Text style={styles.filterText}>Inactive ({inactiveCount})</Text>
+            {/* <Text style={styles.filterText}>Inactive</Text> */}
           </TouchableOpacity>
+              </ScrollView>
+              </View>
         </View>
 
         {/* Search & Add Button */}
@@ -197,17 +260,21 @@ onPress={() => {
         {filteredData.length === 0 && searchQuery !== "" ? (
           <Text style={styles.emptyText}>NO CUSTOMER FOUND.</Text>
         ) : (
-          <FlatList
-            data={filteredData}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.user_id.toString()}
-            ListEmptyComponent={
-              !loading && (
-                <Text style={styles.emptyText}>NO CUSTOMER FOUND.</Text>
-                
-              )
-            }
-          />
+         <FlatList
+  data={filteredData}
+  renderItem={renderItem}
+  keyExtractor={(item) => item.user_id.toString()}
+  contentContainerStyle={[
+    filteredData.length === 0 && { flex: 1, justifyContent: 'center' }, 
+    { paddingBottom: 160 } // add paddingBottom here
+  ]}
+  ListEmptyComponent={
+    !loading && (
+      <Text style={styles.emptyText}>NO CUSTOMER FOUND.</Text>
+    )
+  }
+/>
+
         )}
       </View>
     </SafeAreaView>
@@ -230,7 +297,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: "#222",
+    // backgroundColor: "#222",
     padding: 10,
   },
   avatarContainer: {
@@ -248,6 +315,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "white",
   },
+
+   filterButtonsContent: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 10,
+  gap: 10, 
+},
+
+  filterButtonsContainer: {
+    flexDirection: "row",
+    // flexWrap: "wrap",
+    justifyContent: "space-evenly",
+    marginTop: 15,
+  },
   headerContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -258,6 +339,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 25,
+    marginHorizontal: 5,
     borderWidth: 1,
     borderColor: "white",
   },
@@ -299,13 +381,16 @@ const styles = StyleSheet.create({
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#444",
+    
   },
   snoContainer: {
     width: 30,
+    
     alignItems: "center",
   },
   snoText: {
     color: "#ccc",
+    
   },
 
 

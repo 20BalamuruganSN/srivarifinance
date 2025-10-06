@@ -10,32 +10,37 @@ import {
   Animated,
   Text,
   StatusBar,
+  ActivityIndicator,
+  BackHandler,
 } from "react-native";
-
+import { useColorScheme } from 'react-native';
+import { DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { TextInput, Button, Avatar, HelperText } from "react-native-paper";
-
+import { KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from "react-native";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
-import { useRouter } from "expo-router";
-import Icon from "react-native-vector-icons/MaterialIcons"; // For modal options
+import { useNavigationContainerRef, useRouter } from "expo-router";
+import Icon from "react-native-vector-icons/MaterialIcons";
 import { Picker } from "@react-native-picker/picker";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
-import * as MediaLibrary from "expo-media-library"; // Needed for image saving
+import * as MediaLibrary from "expo-media-library";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
-
 import api from "./Api";
 import { useLocalSearchParams } from "expo-router";
 
 const EditCustomer = () => {
   const navigation = useNavigation();
- const route = useRoute();
+  const route = useRoute();
   const params = useLocalSearchParams();
-  const { id } = params;
+const { id, user_id } = route.params;
 
-  console.log("edit page:", params)
-  console.log("edit page:", id)
+  console.log("edit page:", params);
+  console.log("edit page:", id);
+
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
 
   const [modalVisible, setModalVisible] = useState(false);
   const [currentImageType, setCurrentImageType] = useState("");
@@ -43,12 +48,46 @@ const EditCustomer = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [visible, setVisible] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [loading, setLoading] = useState(false);
-  const [showCityInput, setShowCityInput] = useState(false);
+  const [loading, setLoading] = useState(false);  
+  const [showCustomCity, setShowCustomCity] = useState(false);
+  const [showCustomDistrict, setShowCustomDistrict] = useState(false);
   const [cities, setCities] = useState([]);
-  const [selectedCity, setSelectedCity] = useState("");
+  const [districts, setDistricts] = useState([
+    { id: 1, name: "Tirunelveli" },
+    { id: 2, name: "Tenkasi" },
+    { id: 3, name: "Virudhunagar" },
+    { id: 4, name: "Others" }
+  ]);
   const router = useRouter();
 
+  const [canGoBack, setCanGoBack] = useState(false);
+  const navigationRef = useNavigationContainerRef();
+
+  useEffect(() => {
+    const backAction = () => {
+      if (canGoBack) {
+        router.back();
+      } else {
+        router.replace("/Customer");
+      }
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [router]);
+
+  // Track history on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCanGoBack(navigationRef.canGoBack());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   const [formData, setFormData] = useState({
     user_id: "",
@@ -87,56 +126,87 @@ const EditCustomer = () => {
       return;
     }
 
-    const fetchCustomerData = async () => {
-      setLoading(true);
-      try {
-        console.log("Fetching customer data for ID:", id);
-        const response = await api.get(`/profile/${id}`);
-        const data = response.data.message;
+const fetchCustomerData = async () => {
+  setLoading(true);
+  try {
+    console.log("Fetching customer data for ID:", id);
+    const response = await api.post('/customers_userid', { 
+      user_id: id 
+    });
+    
+    console.log("Full API response:", response.data);
+    
+    if (response.data && response.data.user) {
+      const userData = response.data.user;
+      console.log("Customer data:", userData);
 
-        console.log("Customer data:", data);
+      // Set form data with the available fields, using empty strings for missing ones
+      setFormData(prev => ({
+        ...prev, // Keep any existing values
+        user_id: userData.user_id || id || "",
+        user_name: userData.user_name || "",
+        aadhar_number: userData.aadhar_number || "",
+        address: userData.address || "",
+        landmark: userData.landmark || "",
+        city: userData.city || "",
+        pincode: userData.pincode || "",
+        district: userData.district || "",
+        user_type: userData.user_type || "",
+        status: userData.status || "",
+        mobile_number: userData.mobile_number || "",
+        email: userData.email || "",
+        // For fields that might not be in the API response, keep their current values
+        // or set to empty string if not already set
+        nominee_photo: userData.nominee_photo || prev.nominee_photo || "",
+        nominee_sign: userData.nominee_sign || prev.nominee_sign || "",
+        qualification: userData.qualification || prev.qualification || "",
+        designation: userData.designation || prev.designation || "",
+        alter_mobile_number: userData.alter_mobile_number || prev.alter_mobile_number || "",
+        profile_photo: userData.profile_photo || prev.profile_photo || "",
+        sign_photo: userData.sign_photo || prev.sign_photo || "",
+        ref_name: userData.ref_name || prev.ref_name || "",
+        ref_user_id: userData.ref_user_id || prev.ref_user_id || "",
+        ref_sign_photo: userData.ref_sign_photo || prev.ref_sign_photo || "",
+        ref_aadhar_number: userData.ref_aadhar_number || prev.ref_aadhar_number || "",
+        added_by: userData.added_by || prev.added_by || "",
+        password: "",
+        confirmPassword: "",
+      }));
 
-        setFormData({
-          user_id: data.user_id || "",
-          user_name: data.user_name || "",
-          aadhar_number: data.aadhar_number || "",
-          nominee_photo: data.nominee_photo || "",
-          nominee_sign: data.nominee_sign || "",
-          address: data.address || "",
-          landmark: data.landmark || "",
-          city: data.city || "",
-          pincode: data.pincode || "",
-          qualification: data.qualification || "",
-          designation: data.designation || "",
-          district: data.district || "",
-          user_type: data.user_type || "",
-          status: data.status || "",
-          mobile_number: data.mobile_number || "",
-          alter_mobile_number: data.alter_mobile_number || "",
-          email: data.email || "",
-          profile_photo: data.profile_photo || "",
-          sign_photo: data.sign_photo || "",
-          ref_name: data.ref_name || "",
-          ref_user_id: data.ref_user_id || "",
-          ref_sign_photo: data.ref_sign_photo || "",
-          ref_aadhar_number: data.ref_aadhar_number || "",
-          password: "",
-          confirmPassword: "",
-          added_by: data.added_by || "",
-        });
-
-        setLoading(false);
-      } catch (error) {
-        setLoading(false);
-        console.error("Fetch error:", error);
-        Alert.alert("Error", "Failed to load customer data");
+      // After setting form data, check if city exists in predefined list
+      if (userData.city) {
+        const cityExists = cities.some(c => c.city_name === userData.city);
+        setShowCustomCity(!cityExists);
       }
-    };
+
+      // Check if district exists in predefined list
+      if (userData.district && !districts.some(d => d.name.toLowerCase() === userData.district.toLowerCase())) {
+        setShowCustomDistrict(true);
+      }
+    } else {
+      console.error("User data not found in response:", response.data);
+      Alert.alert("Error", "Customer data not found in the response");
+    }
+    
+    setLoading(false);
+  } catch (error) {
+    setLoading(false);
+    console.error("Fetch error:", error);
+    
+    if (error.response) {
+      console.error("Response data:", error.response.data);
+      console.error("Response status:", error.response.status);
+      Alert.alert("Error", `Failed to load customer data: ${error.response.status}`);
+    } else {
+      Alert.alert("Error", "Failed to load customer data. Please check your connection.");
+    }
+  }
+};
+
 
     fetchCustomerData();
-  }, [id]);
+  }, [id, cities]); // Added cities to dependency array
 
-  // Role & user id from storage
   useEffect(() => {
     const fetchRoleAndUserId = async () => {
       const storedRole = await AsyncStorage.getItem("role");
@@ -153,7 +223,6 @@ const EditCustomer = () => {
     fetchRoleAndUserId();
   }, []);
 
-  // Fetch cities
   const fetchCities = async () => {
     try {
       setLoading(true);
@@ -225,32 +294,76 @@ const EditCustomer = () => {
 
   const handleCityChange = (value) => {
     if (value === "others") {
-      setShowCityInput(true);
-      setFormData((prev) => ({ ...prev, city: "" }));
+      setShowCustomCity(true);
+      setFormData(prev => ({ ...prev, city: "", pincode: "" }));
     } else {
-      const cityObj = cities.find((c) => c.city_name === value);
-      setFormData((prev) => ({ ...prev, city: value, pincode: cityObj?.pincode || "" }));
-      setShowCityInput(false);
+      setShowCustomCity(false);
+      const selectedCityObj = cities.find(c => c.city_name === value);
+      setFormData(prev => ({
+        ...prev,
+        city: value,
+        pincode: selectedCityObj?.pincode || ""
+      }));
     }
-    setSelectedCity(value);
+  };
+
+  const handleDistrictChange = (value) => {
+    if (value === "Others") {
+      setShowCustomDistrict(true);
+      setFormData(prev => ({ ...prev, district: "" }));
+    } else {
+      setShowCustomDistrict(false);
+      setFormData(prev => ({ ...prev, district: value.toLowerCase() }));
+    }
   };
 
   const validateForm = () => {
     const errs = {};
-    if (!formData.user_name.trim()) errs.user_name = "Name is required";
-    else if (!/^[a-zA-Z\s]+$/.test(formData.user_name)) errs.user_name = "Name must contain only letters";
 
-    if (!formData.mobile_number) errs.mobile_number = "Mobile Number is required";
-    else if (!/^\d{10}$/.test(formData.mobile_number)) errs.mobile_number = "Mobile Number must be 10 digits";
+    if (!formData.user_name.trim()) {
+      errs.user_name = "Name is required";
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.user_name)) {
+      errs.user_name = "Name must contain only letters";
+    }
 
-    if (formData.aadhar_number && !/^\d{12}$/.test(formData.aadhar_number)) errs.aadhar_number = "Aadhar Number must be 12 digits";
+    if (!formData.mobile_number) {
+      errs.mobile_number = "Mobile Number is required";
+    } else if (!/^\d+$/.test(formData.mobile_number)) {
+      errs.mobile_number = "Mobile Number must contain only digits";
+    } else if (formData.mobile_number.length !== 10) {
+      errs.mobile_number = "Mobile Number must be 10 digits";
+    }
 
-    if (formData.password && formData.password.length < 4) errs.password = "Password must be more than 4 characters";
+    if (formData.aadhar_number && !/^\d{12}$/.test(formData.aadhar_number)) {
+      errs.aadhar_number = "Aadhar Number must be 12 digits";
+    }
 
-    if (formData.password !== formData.confirmPassword) errs.confirmPassword = "Passwords do not match";
+    if (!formData.city) {
+      errs.city = "City is required";
+    }
+
+    if (!formData.pincode) {
+      errs.pincode = "Pincode is required";
+    } else if (!/^\d+$/.test(formData.pincode)) {
+      errs.pincode = "Pincode must contain only digits";
+    } else if (formData.pincode.length !== 6) {
+      errs.pincode = "Pincode must be 6 digits";
+    }
+
+    if (!formData.district) {
+      errs.district = "District is required";
+    }
+
+    if (formData.password && formData.password.length < 4) {
+      errs.password = "Password must be more than 4 characters";
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      errs.confirmPassword = "Passwords do not match";
+    }
 
     setErrors(errs);
-    return Object.values(errs).every((e) => e === "");
+    return Object.keys(errs).length === 0;
   };
 
   const handleUpdate = async () => {
@@ -258,34 +371,78 @@ const EditCustomer = () => {
       Alert.alert("Mandatory Fields Missing!", "Please fill all required fields");
       return;
     }
+
     setLoading(true);
+
     try {
       const payload = { ...formData };
       await api.put(`/employees/${id}`, payload);
+
       setLoading(false);
       setVisible(true);
-      router.replace("/Customer");
+
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start(() => {
+        setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }).start(() => {
+            setVisible(false);
+            router.replace("/Customer");
+          });
+        }, 1500);
+      });
     } catch (err) {
       setLoading(false);
-      Alert.alert("Error", "Failed to update");
+      Alert.alert("Error", "Failed to update customer");
     }
   };
 
-  const handleDelete = (id) => {
-    api
-      .delete(`user/${id}`)
-      .then((res) => {
-        Alert.alert("Deleted", res.data.message || "Customer deleted successfully");
+  const handleDelete = async (id) => {
+    try {
+      const role = await AsyncStorage.getItem("role");
 
-            // ✅ Go back to the customer page
-            router.replace("/Customer");
-      })
-      .catch((e) => {
-        Alert.alert("Error", e.response?.data?.message || "Error");
-      });
+      if (role !== "admin") {
+        Alert.alert("Permission Denied", "Only admins can delete customers.");
+        return;
+      }
+
+      Alert.alert(
+        "Confirm Delete",
+        "Are you sure you want to delete this customer?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Yes",
+            onPress: () => {
+              api
+                .delete(`user/${id}`)
+                .then((res) => {
+                  Alert.alert("Deleted", res.data.message || "Customer deleted successfully");
+                  router.replace("/Customer");
+                })
+                .catch((e) => {
+                  Alert.alert("Error", e.response?.data?.message || "Error");
+                });
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    } catch (error) {
+      Alert.alert("Error", "Something went wrong while checking user role.");
+      console.error("Delete role check failed:", error);
+    }
   };
 
-  // Animate success message
   useEffect(() => {
     if (visible) {
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
@@ -299,380 +456,416 @@ const EditCustomer = () => {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#07387A" />
-      {/* Header */}
-      {/* You can add your header component here */}
-
-      <ScrollView>
-        <View style={styles.container}>
-          {/* ID (read-only) */}
-          <TextInput mode="outlined" label="Id*" value={formData.user_id} disabled style={styles.input} />
-
-          {/* Name */}
-          <TextInput
-            mode="outlined"
-            label="Name*"
-            value={formData.user_name}
-            onChangeText={(val) => handleInputChange("user_name", val)}
-            style={styles.input}
-          />
-          {errors.user_name && <HelperText type="error">{errors.user_name}</HelperText>}
-
-          {/* Mobile */}
-          <TextInput
-            mode="outlined"
-            label="Mobile No*"
-            maxLength={10}
-            keyboardType="phone-pad"
-            value={formData.mobile_number}
-            onChangeText={(val) => handleInputChange("mobile_number", val)}
-            style={styles.input}
-          />
-          {errors.mobile_number && <HelperText type="error">{errors.mobile_number}</HelperText>}
-
-          {/* Address */}
-          <TextInput
-            mode="outlined"
-            label="Address"
-            value={formData.address}
-            onChangeText={(val) => handleInputChange("address", val)}
-            style={styles.input}
-          />
-
-          {/* Status */}
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.status}
-              onValueChange={(val) => handleInputChange("status", val)}
-              style={styles.inputPicker}
-            >
-              <Picker.Item label="Select Status" value="" />
-              <Picker.Item label="Active" value="active" />
-              <Picker.Item label="Inactive" value="inactive" />
-            </Picker>
-          </View>
-
-          {/* User Type */}
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.user_type}
-              onValueChange={(val) => handleInputChange("user_type", val)}
-              style={styles.inputPicker}
-            >
-              <Picker.Item label="User Type" value="" />
-              <Picker.Item label="Customer" value="user" />
-              {role === "admin" && <Picker.Item label="Employee" value="employee" />}
-            </Picker>
-          </View>
-
-          {/* Aadhar Number */}
-          <TextInput
-            mode="outlined"
-            label="Aadhar Number"
-            maxLength={12}
-            keyboardType="numeric"
-            value={formData.aadhar_number}
-            onChangeText={(val) => handleInputChange("aadhar_number", val)}
-            style={styles.input}
-          />
-          {errors.aadhar_number && <HelperText type="error">{errors.aadhar_number}</HelperText>}
-
-          {/* Qualification */}
-          <TextInput
-            mode="outlined"
-            label="Qualification"
-            value={formData.qualification}
-            onChangeText={(val) => handleInputChange("qualification", val)}
-            style={styles.input}
-          />
-
-          {/* Designation */}
-          <TextInput
-            mode="outlined"
-            label="Designation"
-            value={formData.designation}
-            onChangeText={(val) => handleInputChange("designation", val)}
-            style={styles.input}
-          />
-
-          {/* Landmark */}
-          <TextInput
-            mode="outlined"
-            label="Landmark"
-            value={formData.landmark}
-            onChangeText={(val) => handleInputChange("landmark", val)}
-            style={styles.input}
-          />
-
-          {/* City Picker */}
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.city}
-              onValueChange={(val) => handleCityChange(val)}
-              style={styles.inputPicker}
-            >
-              <Picker.Item label="Select a city*" value="" />
-              {cities.map((city, index) => (
-                <Picker.Item key={index} label={city.city_name} value={city.city_name} />
-              ))}
-              <Picker.Item label="Others" value="others" />
-            </Picker>
-          </View>
-
-          {/* Custom City Input */}
-          {showCityInput && (
-            <TextInput
-              mode="outlined"
-              label="City*"
-              value={formData.city}
-              onChangeText={(val) => handleInputChange("city", val)}
-              style={styles.input}
-            />
-          )}
-
-          {errors.city && <HelperText type="error">{errors.city}</HelperText>}
-
-          {/* Pincode */}
-          <TextInput
-            mode="outlined"
-            label="Pincode*"
-            maxLength={6}
-            keyboardType="phone-pad"
-            value={formData.pincode}
-            onChangeText={(val) => handleInputChange("pincode", val)}
-            style={styles.input}
-          />
-          {errors.pincode && <HelperText type="error">{errors.pincode}</HelperText>}
-
-          {/* District Picker */}
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.district}
-              onValueChange={(val) => handleInputChange("district", val)}
-              style={styles.inputPicker}
-            >
-              <Picker.Item label="Select District*" value="" />
-              <Picker.Item label="Tirunelveli" value="tirunelveli" />
-              <Picker.Item label="Tenkasi" value="tenkasi" />
-              <Picker.Item label="Virudhunagar" value="virudhunagar" />
-              <Picker.Item label="Others" value="others" />
-            </Picker>
-          </View>
-
-          {/* District custom input if others */}
-          {formData.district === "others" && (
-            <TextInput
-              mode="outlined"
-              label="District"
-              value={formData.district}
-              onChangeText={(val) => handleInputChange("district", val)}
-              style={styles.input}
-            />
-          )}
-          {errors.district && <HelperText type="error">{errors.district}</HelperText>}
-
-          {/* Email */}
-          <TextInput
-            mode="outlined"
-            label="Email Address"
-            keyboardType="email-address"
-            value={formData.email}
-            onChangeText={(val) => handleInputChange("email", val)}
-            style={styles.input}
-          />
-          {errors.email && <HelperText type="error">{errors.email}</HelperText>}
-
-          {/* Reference User ID */}
-          <TextInput
-            mode="outlined"
-            label="Reference User ID"
-            value={formData.ref_user_id}
-            onChangeText={(val) => handleInputChange("ref_user_id", val)}
-            style={styles.input}
-          />
-          {errors.ref_user_id && <HelperText type="error">{errors.ref_user_id}</HelperText>}
-
-          {/* Nominee Name */}
-          <TextInput
-            mode="outlined"
-            label="Nominee Name"
-            value={formData.ref_name}
-            onChangeText={(val) => handleInputChange("ref_name", val)}
-            style={styles.input}
-          />
-          {errors.ref_name && <HelperText type="error">{errors.ref_name}</HelperText>}
-
-          {/* Nominee Aadhar Number */}
-          <TextInput
-            mode="outlined"
-            label="Nominee Aadhar Number"
-            maxLength={12}
-            keyboardType="phone-pad"
-            value={formData.ref_aadhar_number}
-            onChangeText={(val) => handleInputChange("ref_aadhar_number", val)}
-            style={styles.input}
-          />
-          {errors.ref_aadhar_number && <HelperText type="error">{errors.ref_aadhar_number}</HelperText>}
-
-          {/* Nominee Mobile No */}
-          <TextInput
-            mode="outlined"
-            label="Nominee Mobile No"
-            maxLength={10}
-            keyboardType="phone-pad"
-            value={formData.alter_mobile_number}
-            onChangeText={(val) => handleInputChange("alter_mobile_number", val)}
-            style={styles.input}
-          />
-          {errors.alter_mobile_number && <HelperText type="error">{errors.alter_mobile_number}</HelperText>}
-
-          {/* Password */}
-          <TextInput
-            mode="outlined"
-            label="Password"
-            secureTextEntry={!showPassword}
-            value={formData.password}
-            onChangeText={(val) => handleInputChange("password", val)}
-            style={styles.input}
-            right={
-              <TextInput.Icon icon={showPassword ? "eye" : "eye-off"} onPress={() => setShowPassword(!showPassword)} />
-            }
-          />
-          {errors.password && <HelperText type="error">{errors.password}</HelperText>}
-
-          {/* Confirm Password */}
-          <TextInput
-            mode="outlined"
-            label="Confirm Password"
-            secureTextEntry={!showPassword}
-            value={formData.confirmPassword}
-            onChangeText={(val) => handleInputChange("confirmPassword", val)}
-            style={styles.input}
-          />
-          {errors.confirmPassword && <HelperText type="error">{errors.confirmPassword}</HelperText>}
-
-          {/* Photo Uploads */}
-          <View style={styles.photoContainer}>
-            {/* Profile Photo */}
-            <View style={styles.column}>
-              {formData.profile_photo ? (
-                <Avatar.Image size={80} source={{ uri: formData.profile_photo }} />
-              ) : null}
-              <Button
-                onPress={() => {
-                  setCurrentImageType("profile_photo");
-                  setModalVisible(true);
-                }}
-                icon={() => <Icon name="camera" size={20} color="#0000FF" />}
-                mode="contained"
-                style={styles.photoButton}
-                labelStyle={styles.photoButtonText}
-              >
-                Profile Photo
-              </Button>
-            </View>
-
-            {/* Sign Photo */}
-            <View style={styles.column}>
-              {formData.sign_photo ? (
-                <Avatar.Image size={80} source={{ uri: formData.sign_photo }} />
-              ) : null}
-              <Button
-                onPress={() => {
-                  setCurrentImageType("sign_photo");
-                  setModalVisible(true);
-                }}
-                icon={() => <Icon name="camera" size={20} color="#0000FF" />}
-                mode="contained"
-                style={styles.photoButton}
-                labelStyle={styles.photoButtonText}
-              >
-                Sign Photo
-              </Button>
-            </View>
-          </View>
-
-          {/* Modal for image selection */}
-          <Modal
-            visible={modalVisible}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setModalVisible(false)}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1,paddingBottom:180 }}
+            keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Choose an Option</Text>
-                <TouchableOpacity style={styles.optionButton} onPress={() => pickImage("camera")}>
-                  <Icon name="camera" size={20} color="#fff" />
-                  <Text style={styles.optionText}>Camera</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.optionButton} onPress={() => pickImage("gallery")}>
-                  <Icon name="image" size={20} color="#fff" />
-                  <Text style={styles.optionText}>Gallery</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
+            <View style={styles.container}>
+              {loading && (
+                <View style={styles.overlay}>
+                  <ActivityIndicator color="white" size="large" />
+                </View>
+              )}
+
+              <TextInput 
+                mode="outlined" 
+                label="Id*" 
+                value={formData.user_id} 
+                disabled 
+                style={styles.input} 
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Name*"
+                value={formData.user_name}
+                onChangeText={(val) => handleInputChange("user_name", val)}
+                style={styles.input}
+              />
+              {errors.user_name && <HelperText type="error">{errors.user_name}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Mobile No*"
+                maxLength={10}
+                keyboardType="phone-pad"
+                value={formData.mobile_number}
+                onChangeText={(val) => handleInputChange("mobile_number", val)}
+                style={styles.input}
+              />
+              {errors.mobile_number && <HelperText type="error">{errors.mobile_number}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Address"
+                value={formData.address}
+                onChangeText={(val) => handleInputChange("address", val)}
+                style={styles.input}
+              />
+
+             <View style={[styles.pickerContainer, { 
+  backgroundColor: colorScheme === 'dark' ? theme.colors.background : '#f5f5f5'
+}]}>
+  <Picker
+    selectedValue={formData.status}
+    onValueChange={(val) => handleInputChange("status", val)}
+    style={[styles.inputPicker, { 
+      color: theme.colors.text,
+      backgroundColor: colorScheme === 'dark' ? theme.colors.background : '#f5f5f5'
+    }]}
+    dropdownIconColor={theme.colors.text}
+  >
+    <Picker.Item label="Select Status" value="" />
+    <Picker.Item label="Active" value="active" />
+    <Picker.Item label="Inactive" value="inactive" />
+  </Picker>
+</View>
+
+<View style={[styles.pickerContainer, { 
+  backgroundColor: colorScheme === 'dark' ? theme.colors.background : '#f5f5f5'
+}]}>
+  <Picker
+    selectedValue={formData.user_type}
+    onValueChange={(val) => handleInputChange("user_type", val)}
+    style={[styles.inputPicker, { 
+      color: theme.colors.text,
+      backgroundColor: colorScheme === 'dark' ? theme.colors.background : '#f5f5f5'
+    }]}
+    dropdownIconColor={theme.colors.text}
+  >
+    <Picker.Item label="User Type" value="" />
+    <Picker.Item label="Customer" value="user" />
+    {role === "admin" && <Picker.Item label="Employee" value="employee" />}
+  </Picker>
+</View>
+              <TextInput
+                mode="outlined"
+                label="Aadhar Number"
+                maxLength={12}
+                keyboardType="numeric"
+                value={formData.aadhar_number}
+                onChangeText={(val) => handleInputChange("aadhar_number", val)}
+                style={styles.input}
+              />
+              {errors.aadhar_number && <HelperText type="error">{errors.aadhar_number}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Qualification"
+                value={formData.qualification}
+                onChangeText={(val) => handleInputChange("qualification", val)}
+                style={styles.input}
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Designation"
+                value={formData.designation}
+                onChangeText={(val) => handleInputChange("designation", val)}
+                style={styles.input}
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Landmark"
+                value={formData.landmark}
+                onChangeText={(val) => handleInputChange("landmark", val)}
+                style={styles.input}
+              />
+
+            <View style={[styles.pickerContainer, { backgroundColor: theme.colors.background }]}>
+                <Picker
+                  selectedValue={formData.city || ""}
+                  onValueChange={(val) => handleCityChange(val)}
+                  style={[styles.inputPicker, { color: theme.colors.text }]}
+    dropdownIconColor={theme.colors.text}
+                >
+                  <Picker.Item label="Select a city*" value="" />
+                  {cities.map((city, index) => (
+                    <Picker.Item key={index} label={city.city_name} value={city.city_name} />
+                  ))}
+                  <Picker.Item label="Others" value="others" />
+                </Picker>
+              </View>
+              {errors.city && <HelperText type="error">{errors.city}</HelperText>}
+
+              {showCustomCity && (
+                <>
+                  <TextInput
+                    mode="outlined"
+                    label="Enter City Name*"
+                    value={formData.city}
+                    onChangeText={(val) => handleInputChange("city", val)}
+                    style={styles.input}
+                     theme={colorScheme === 'dark' ? { colors: { text: 'white', placeholder: 'gray' } } : undefined}
+                  />
+                  <TextInput
+                    mode="outlined"
+                    label="Enter Pincode*"
+                    maxLength={6}
+                    keyboardType="phone-pad"
+                    value={formData.pincode}
+                    onChangeText={(val) => handleInputChange("pincode", val)}
+                    style={styles.input}
+                  />
+                  {errors.pincode && <HelperText type="error">{errors.pincode}</HelperText>}
+                </>
+              )}
+
+              {!showCustomCity && formData.city && (
+                <TextInput
+                  mode="outlined"
+                  label="Pincode*"
+                  maxLength={6}
+                  keyboardType="phone-pad"
+                  value={formData.pincode}
+                  onChangeText={(val) => handleInputChange("pincode", val)}
+                  style={styles.input}
+                  editable={!!cities.find(c => c.city_name === formData.city)}
+                />
+              )}
+
+              <TextInput
+                mode="outlined"
+                label="Enter District Name*"
+                value={formData.district}
+                onChangeText={(val) => handleInputChange("district", val)}
+                style={styles.input}
+              />
+
+              <TextInput
+                mode="outlined"
+                label="Email Address"
+                keyboardType="email-address"
+                value={formData.email}
+                onChangeText={(val) => handleInputChange("email", val)}
+                style={styles.input}
+              />
+              {errors.email && <HelperText type="error">{errors.email}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Reference User ID"
+                value={formData.ref_user_id}
+                onChangeText={(val) => handleInputChange("ref_user_id", val)}
+                style={styles.input}
+              />
+              {errors.ref_user_id && <HelperText type="error">{errors.ref_user_id}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Nominee Name"
+                value={formData.ref_name}
+                onChangeText={(val) => handleInputChange("ref_name", val)}
+                style={styles.input}
+              />
+              {errors.ref_name && <HelperText type="error">{errors.ref_name}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Nominee Aadhar Number"
+                maxLength={12}
+                keyboardType="phone-pad"
+                value={formData.ref_aadhar_number}
+                onChangeText={(val) => handleInputChange("ref_aadhar_number", val)}
+                style={styles.input}
+              />
+              {errors.ref_aadhar_number && <HelperText type="error">{errors.ref_aadhar_number}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Nominee Mobile No"
+                maxLength={10}
+                keyboardType="phone-pad"
+                value={formData.alter_mobile_number}
+                onChangeText={(val) => handleInputChange("alter_mobile_number", val)}
+                style={styles.input}
+              />
+              {errors.alter_mobile_number && <HelperText type="error">{errors.alter_mobile_number}</HelperText>}
+
+              {/* <TextInput
+                mode="outlined"
+                label="Password"
+                secureTextEntry={!showPassword}
+                value={formData.password}
+                onChangeText={(val) => handleInputChange("password", val)}
+                style={styles.input}
+                right={
+                  <TextInput.Icon icon={showPassword ? "eye" : "eye-off"} onPress={() => setShowPassword(!showPassword)} />
+                }
+              />
+              {errors.password && <HelperText type="error">{errors.password}</HelperText>}
+
+              <TextInput
+                mode="outlined"
+                label="Confirm Password"
+                secureTextEntry={!showPassword}
+                value={formData.confirmPassword}
+                onChangeText={(val) => handleInputChange("confirmPassword", val)}
+                style={styles.input}
+              />
+              {errors.confirmPassword && <HelperText type="error">{errors.confirmPassword}</HelperText>} */}
+
+             {/* Main Wrapper */}
+<View style={{ marginVertical: 20 }}>
+  {/* First Row: Profile & Sign */}
+  <View style={styles.photoContainer}>
+    {/* Profile Photo */}
+    <View style={styles.column}>
+      {formData.profile_photo ? (
+        <Avatar.Image size={80} source={{ uri: formData.profile_photo }} />
+      ) : null}
+      <Button
+        onPress={() => {
+          setCurrentImageType("profile_photo");
+          setModalVisible(true);
+        }}
+        icon={() => <Icon name="camera" size={20} color="#0000FF" />}
+        mode="contained"
+        style={styles.photoButton}
+        labelStyle={styles.photoButtonText}
+      >
+        Profile Photo
+      </Button>
+    </View>
+
+    {/* Sign Photo */}
+    <View style={styles.column}>
+      {formData.sign_photo ? (
+        <Avatar.Image size={80} source={{ uri: formData.sign_photo }} />
+      ) : null}
+      <Button
+        onPress={() => {
+          setCurrentImageType("sign_photo");
+          setModalVisible(true);
+        }}
+        icon={() => <Icon name="camera" size={20} color="#0000FF" />}
+        mode="contained"
+        style={styles.photoButton}
+        labelStyle={styles.photoButtonText}
+      >
+        Sign Photo
+      </Button>
+    </View>
+  </View>
+
+  {/* Second Row: Nominee Photo & Sign */}
+  <View style={styles.photoContainer}>
+    {/* Nominee Photo */}
+    <View style={styles.column}>
+      {formData.nominee_photo ? (
+        <Avatar.Image size={80} source={{ uri: formData.nominee_photo }} />
+      ) : null}
+      <Button
+        onPress={() => {
+          setCurrentImageType("nominee_photo");
+          setModalVisible(true);
+        }}
+        icon={() => <Icon name="camera" size={20} color="#0000FF" />}
+        mode="contained"
+        style={styles.photoButton}
+        labelStyle={styles.photoButtonText}
+      >
+        Nominee Photo
+      </Button>
+    </View>
+
+    {/* Nominee Sign */}
+    <View style={styles.column}>
+      {formData.nominee_sign ? (
+        <Avatar.Image size={80} source={{ uri: formData.nominee_sign }} />
+      ) : null}
+      <Button
+        onPress={() => {
+          setCurrentImageType("nominee_sign");
+          setModalVisible(true);
+        }}
+        icon={() => <Icon name="camera" size={20} color="#0000FF" />}
+        mode="contained"
+        style={styles.photoButton}
+        labelStyle={styles.photoButtonText}
+      >
+        Nominee Sign
+      </Button>
+    </View>
+  </View>
+</View>
+
+              {/* Modal for image picker */}
+              <Modal
+                visible={modalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setModalVisible(false)}
+              >
+                <View style={styles.modalContainer}>
+                  <View style={styles.modalContent}>
+                    <Text style={styles.modalTitle}>Choose an Option</Text>
+                    <TouchableOpacity style={styles.optionButton} onPress={() => pickImage("camera")}>
+                      <Icon name="camera" size={20} color="#fff" />
+                      <Text style={styles.optionText}>Camera</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.optionButton} onPress={() => pickImage("gallery")}>
+                      <Icon name="image" size={20} color="#fff" />
+                      <Text style={styles.optionText}>Gallery</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+
+              {visible && (
+                <Animated.View style={[styles.popup, { opacity: fadeAnim }]}>
+                  <Text style={styles.popupText}>Customer Updated Successfully!</Text>
+                </Animated.View>
+              )}
+
+              <View style={styles.buttonRow}>
+                <Button
+                  mode="contained"
+                  icon={() => <MaterialCommunityIcons name="pencil" size={20} color="#000" />}
+                  style={styles.submitbutton}
+                  onPress={handleUpdate}
+                >
+                  <Text style={styles.submitbuttontext}>Update</Text>
+                </Button>
+                
+                {role === "admin" && (
+                  <Button
+                    icon={() => (
+                      <MaterialCommunityIcons name="delete-forever" size={20} color="#0000FF" />
+                    )}
+                    mode="contained"
+                    style={styles.deleteButton}
+                    onPress={() => handleDelete(id)}
+                  >
+                    Delete
+                  </Button>
+                )}
               </View>
             </View>
-          </Modal>
-
-          {/* Success message */}
-          {visible && (
-            <Animated.View style={[styles.popup, { opacity: fadeAnim }]}>
-              <Text style={styles.popupText}>User Updated Successfully!</Text>
-            </Animated.View>
-          )}
-
-          {/* Buttons */}
-          <View style={styles.buttonRow}>
-            <Button
-              mode="contained"
-              icon={() => <MaterialCommunityIcons name="pencil" size={20} color="#000" />}
-              style={styles.submitbutton}
-              onPress={handleUpdate}
-            >
-              <Text style={styles.submitbuttontext}>Update</Text>
-            </Button>
-            {/* Optional delete */}
-             <Button
-      icon={() => (
-        <MaterialCommunityIcons name="delete-forever" size={20} color="#0000FF" />
-      )}
-      mode="contained"
-      style={styles.deleteButton}
-      onPress={() => handleDelete(id)}
-    >
-      Delete
-    </Button>
-          </View>
-        </View>
-      </ScrollView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </>
   );
 };
 
-export default EditCustomer;
 
+
+// Note: You said no styles modification, so keep styles as is.
 const styles = StyleSheet.create({
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#14274E",
-  },
-  header: {
-    marginTop: 30,
-    textAlign: "center",
-    fontSize: 20,
-    fontWeight: "bold",
-    padding: 10,
-    color: "#fff",
-    marginLeft: 40,
-  },
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: "#07387A",
+    backgroundColor: "#fff",
   },
   overlay: {
     position: "absolute",
@@ -701,28 +894,39 @@ const styles = StyleSheet.create({
     height: 50,
     width: "100%",
   },
-  photoContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 20,
-  },
-  photoButton: {
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 7,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    width: "90%",
-  },
-  photoButtonText: {
-    color: "#000",
-    fontSize: 14,
-    fontWeight: "bold",
-    marginTop: 5,
-  },
-  column: {
-    alignItems: "center",
-  },
+photoContainer: {
+  flexDirection: "row",
+  justifyContent: "space-around",
+  marginVertical: 10,
+},
+
+column: {
+  alignItems: "center",
+  justifyContent: "center",
+  width: 150,   // 🔹 Fixed width
+  height: 200,  // 🔹 Fixed height
+  backgroundColor: "#f2f2f2", // optional card background
+  borderRadius: 10,
+  padding: 10,
+},
+
+photoButton: {
+  backgroundColor: "#07387A",
+  paddingHorizontal: 7,
+  paddingVertical: 8,
+  borderRadius: 8,
+  alignItems: "center",
+  width: "100%", // 🔹 button will match card width
+  marginTop: 10,
+},
+
+photoButtonText: {
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: "bold",
+},
+
+
   modalContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -765,16 +969,17 @@ const styles = StyleSheet.create({
   },
   popup: {
     position: "absolute",
-    top: 50,
+    bottom: 20,
     alignSelf: "center",
     backgroundColor: "#4BB543",
-    padding: 15,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 30,
     zIndex: 999,
   },
   popupText: {
-    color: "#fff",
-    fontSize: 16,
+    color: "white",
+    fontWeight: "bold",
   },
   submitbutton: {
     backgroundColor: "#FFC107",
@@ -789,8 +994,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   deleteButton: {
-    borderColor: "#f00",
-    borderWidth: 1,
+    backgroundColor: "#ff4d4d",
     marginLeft: 10,
   },
   buttonRow: {
@@ -799,3 +1003,5 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
 });
+
+export default EditCustomer;

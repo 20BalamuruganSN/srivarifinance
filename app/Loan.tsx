@@ -10,44 +10,80 @@ import {
   TouchableOpacity,
   Animated,
   ScrollView,
+  BackHandler,
 } from "react-native";
 
-import Ionicons from '@expo/vector-icons/Ionicons';
-
+import Ionicons from "@expo/vector-icons/Ionicons";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Button, TextInput, Avatar } from "react-native-paper";
-
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImageManipulator from "expo-image-manipulator";
 import api from "./Api";
 import * as ImagePicker from "expo-image-picker";
-
 import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as MediaLibrary from "expo-media-library";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import axios from "axios";
+import { useColorScheme } from "react-native";
+import { DefaultTheme, DarkTheme } from "@react-navigation/native";
+import { router, useNavigationContainerRef } from "expo-router";
 
-// Your SearchableDropdown component remains unchanged
+interface Customer {
+  user_id: number;
+  username: string;
+  // add other fields if needed
+}
+
 function SearchableDropdown({ items, placeholder, onItemSelect }) {
   const [searchText, setSearchText] = useState("");
   const [filteredItems, setFilteredItems] = useState(items);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const navigationRef = useNavigationContainerRef();
 
- const handleSearch = (text) => {
-  setSearchText(text);
-  
-  const filteredData = items.filter((item) => {
-    const nameMatch = item.user_name.toLowerCase().includes(text.toLowerCase());
-    const idMatch = item.user_id.toLowerCase().includes(text.toLowerCase());
-    return nameMatch || idMatch;
-  });
-  
-  setFilteredItems(filteredData);
-  setDropdownVisible(true);
-};
+  useEffect(() => {
+    const backAction = () => {
+      if (canGoBack) {
+        router.back();
+      } else {
+        router.replace("/ViewLoan");
+      }
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [router]);
+
+  // Track history on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCanGoBack(navigationRef.canGoBack());
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleSearch = (text) => {
+    setSearchText(text);
+    const filteredData = items.filter((item) => {
+      const nameMatch = item.user_name
+        .toLowerCase()
+        .includes(text.toLowerCase());
+      const idMatch = item.user_id.toLowerCase().includes(text.toLowerCase());
+      return nameMatch || idMatch;
+    });
+    setFilteredItems(filteredData);
+    setDropdownVisible(true);
+  };
+
   const handleItemPress = (item) => {
     setSearchText(item.user_name);
     setDropdownVisible(false);
@@ -74,7 +110,9 @@ function SearchableDropdown({ items, placeholder, onItemSelect }) {
               style={styles.item}
               onPress={() => handleItemPress(item)}
             >
-              <Text style={styles.itemText}>{`${item.user_name}_${item.user_id}`}</Text>
+              <Text
+                style={styles.itemText}
+              >{`${item.user_name}_${item.user_id}`}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -88,34 +126,41 @@ function SearchableDropdown({ items, placeholder, onItemSelect }) {
 }
 
 export default function Loan() {
-  
   const [showLoanDatePicker, setShowLoanDatePicker] = useState(false);
   const [showLoanCloseDatePicker, setShowLoanCloseDatePicker] = useState(false);
-  const [selectedCategoryName, setSelectedCategoryName] = useState("Category names");
+  const [selectedCategoryName, setSelectedCategoryName] =
+    useState("Category names");
   const [visible, setVisible] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [loanData, setLoanData] = useState(null);
-  const [tenure_month, setTenure] = useState('');
-  const [interest_percentage, setInterest] = useState('');
+  const [tenure_month, setTenure] = useState("");
+  const [loanId, setLoanId] = useState("");
+  const [interest_percentage, setInterest] = useState("");
   const [totalAmount, setTotalAmount] = useState(0);
   const [monthlyDue, setMonthlyDue] = useState(0);
   const [interestAmount, setInterestAmount] = useState(0);
   const [loading, setLoading] = useState(false);
-  console.log("tenure", tenure_month);
   const [vinError, setVinError] = useState("");
+  const [userRole, setUserRole] = useState("");
+  const [loanAmount, setLoanAmount] = useState("");
+  const [totalLoanAmount, setTotalLoanAmount] = useState(0);
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === "dark" ? DarkTheme : DefaultTheme;
 
   const [formData, setFormData] = useState({
     loan_id: "",
     user_id: "",
     category_id: "",
     duration: "",
-    loan_amount: '', 
-    status: "Status",
+    loan_amount: "",
+    status: "",
     image: "",
     tenure_month: "",
-    interest_percentage: "", 
-    loan_date: "Select Date",
-    loan_close_date: "",
+    interest_percentage: "",
+    loan_date: "",
+    loan_closed_date: "",
     employee_id: "",
     total_amount: "",
     due_amount: "",
@@ -126,7 +171,6 @@ export default function Loan() {
     VIN_number: "",
     chassis_number: "",
     engine_number: "",
-   
     vehicle_exterior_photo_front: "",
     vehicle_exterior_photo_back: "",
     vehicle_exterior_photo_left: "",
@@ -134,16 +178,18 @@ export default function Loan() {
     odometer_reading_photo: "",
     VIN_plate_number_photo: "",
     engine_number_photo: "",
-    chassis_number_photo: "",
+    // chassis_number_photo_base64: "",
+    // chassis_number_photo: "",
   });
 
   const [errors, setErrors] = useState({
     loan_id: "",
     category_id: "",
+    status: "",
     user_id: "",
     loan_amount: "",
     loan_date: "",
-    loan_close_date: "",
+    loan_closed_date: "",
     image: "",
     segment: "",
     vehicle_make: "",
@@ -156,8 +202,12 @@ export default function Loan() {
     vehicle_exterior_photo_back: "",
     vehicle_exterior_photo_left: "",
     vehicle_exterior_photo_right: "",
-    odometer_reading_photo: "",   
-    chassis_number_photo: "",
+    odometer_reading_photo: "",
+    chassis_number_photo_base64: "",
+    // chassis_number_photo: "",
+    engine_number_photo: "",
+    tenure_month: "",
+    interest_percentage: "",
   });
 
   const [modalVisible, setModalVisible] = useState({
@@ -166,7 +216,8 @@ export default function Loan() {
     vehicle_exterior_photo_left: false,
     vehicle_exterior_photo_right: false,
     odometer_reading_photo: false,
-    chassis_number_photo: false,
+    // chassis_number_photo: false,
+    chassis_number_photo_base64: false,
     image: false,
   });
 
@@ -177,11 +228,10 @@ export default function Loan() {
   const [customerdata, setCustomerData] = useState<any[]>([]);
   const [makes, setMakes] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
+  const navigation = useNavigation();
 
   // Format numbers with commas
-  const formatNumber = (num) => (num ? num.toLocaleString() : '0');
-
-  const navigation = useNavigation();
+  const formatNumber = (num) => (num ? num.toLocaleString() : "0");
 
   // -------- Modal handling functions --------
   const openModal = (imageType) => {
@@ -202,7 +252,6 @@ export default function Loan() {
 
   // -------- Image picking function --------
   const pickImage = async (source) => {
-    // Close modal
     setModalVisible((prev) => {
       const newState = { ...prev };
       Object.keys(newState).forEach((key) => (newState[key] = false));
@@ -224,8 +273,14 @@ export default function Loan() {
 
     const result =
       source === "camera"
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 1 })
-        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 1 });
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: false,
+            quality: 1,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: false,
+            quality: 1,
+          });
 
     if (!result.canceled) {
       const imageUri = result.assets[0].uri;
@@ -246,9 +301,12 @@ export default function Loan() {
           const asset = await MediaLibrary.createAssetAsync(resizedImage.uri);
           await MediaLibrary.createAlbumAsync("MyAppImages", asset, false);
 
-          const base64Image = await FileSystem.readAsStringAsync(resizedImage.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          const base64Image = await FileSystem.readAsStringAsync(
+            resizedImage.uri,
+            {
+              encoding: FileSystem.EncodingType.Base64,
+            }
+          );
 
           setFormData((prevData) => ({
             ...prevData,
@@ -262,14 +320,54 @@ export default function Loan() {
     }
   };
 
+  // 🔹 Utility function for formatting
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date)) return ""; // invalid date handle
+
+    let day = date.getDate().toString().padStart(2, "0");
+    let month = (date.getMonth() + 1).toString().padStart(2, "0");
+    let year = date.getFullYear();
+
+    return `${day}-${month}-${year}`; // dd-mm-yyyy
+  };
+
   // -------- Validation & Submit --------
   const validateForm = () => {
     let valid = true;
     let newErrors = { ...errors };
-    if (!formData.loan_amount || formData.loan_amount.trim() === "") {
-      newErrors.loan_amount = "Loan amount is required.";
+
+    // Reset errors
+    Object.keys(newErrors).forEach((key) => (newErrors[key] = ""));
+
+    // Required fields validation
+
+    if (!formData.user_id) {
+      newErrors.user_id = "Customer is required";
       valid = false;
     }
+    if (!formData.loan_amount || formData.loan_amount.trim() === "") {
+      newErrors.loan_amount = "Loan amount is required";
+      valid = false;
+    }
+    if (!tenure_month || tenure_month.trim() === "") {
+      newErrors.tenure_month = "Tenure is required";
+      valid = false;
+    }
+    if (!interest_percentage || interest_percentage.trim() === "") {
+      newErrors.interest_percentage = "Interest percentage is required";
+      valid = false;
+    }
+    if (!formData.loan_date || formData.loan_date.trim() === "") {
+      newErrors.loan_date = "Loan date is required";
+      valid = false;
+    }
+    if (!formData.status || formData.status.trim() === "") {
+      newErrors.status = "Status is required";
+      valid = false;
+    }
+
     setErrors(newErrors);
     return valid;
   };
@@ -283,18 +381,24 @@ export default function Loan() {
           formData.append(key, data[key]);
         }
       });
-      const response = await axios.post("http://192.168.1.20:8000/api/loans", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        timeout: 15000,
-      });
+      const response = await axios.post(
+        "https://reiosglobal.com/srivarimob/api/loans",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 15000,
+        }
+      );
       console.log("Loan data response:", response.data);
       return response.data;
     } catch (error) {
       console.error("Error submitting loan data:", error);
       if (error.response) {
-        throw new Error(error.response.data.message || "Loan submission failed");
+        throw new Error(
+          error.response.data.message || "Loan submission failed"
+        );
       } else if (error.request) {
         throw new Error("No response from server");
       } else {
@@ -304,19 +408,66 @@ export default function Loan() {
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) return;
+    // console.log(
+    //   "photo",
+    //   formData.vehicle_exterior_photo_front,
+    //   formData.vehicle_exterior_photo_back,
+    //   formData.vehicle_exterior_photo_left,
+    //   formData.vehicle_exterior_photo_right,
+    //   formData.odometer_reading_photo,
+    //   formData.chassis_number_photo
+    // );
+
+    if (!validateForm()) {
+      Alert.alert("Validation Error", "Please fill all required fields");
+      return;
+    }
+
+    // const updatedData = {
+    //   ...formData,
+    //   loan_id: formData.loan_id,
+    //   loan_amount: formData.loan_amount,
+    //   tenure_month: tenure_month,
+    //   interest_percentage: interest_percentage,
+    //   status: formData.status,
+    // };
 
     const updatedData = {
-      ...formData,
+      loan_id: formData.loan_id,
+      user_id: formData.user_id,
+      category_id: formData.category_id,
+      duration: formData.duration,
       loan_amount: formData.loan_amount,
-      tenure_month: tenure_month,
-      interest_percentage: interest_percentage,
+      status: formData.status,
+      image: formData.image,
+      tenure_month: tenure_month, // override
+      interest_percentage: interest_percentage, // override
+      loan_date: formData.loan_date,
+      loan_closed_date: formData.loan_closed_date,
+      employee_id: formData.employee_id,
+      total_amount: formData.total_amount,
+      due_amount: formData.due_amount,
+      segment: formData.segment,
+      vehicle_make: formData.vehicle_make,
+      vehicle_model: formData.vehicle_model,
+      year_of_manufacture: formData.year_of_manufacture,
+      VIN_number: formData.VIN_number,
+      chassis_number: formData.chassis_number,
+      engine_number: formData.engine_number,
+      vehicle_exterior_photo_front: formData.vehicle_exterior_photo_front,
+      vehicle_exterior_photo_back: formData.vehicle_exterior_photo_back,
+      vehicle_exterior_photo_left: formData.vehicle_exterior_photo_left,
+      vehicle_exterior_photo_right: formData.vehicle_exterior_photo_right,
+      odometer_reading_photo: formData.odometer_reading_photo,
+      VIN_plate_number_photo: formData.VIN_plate_number_photo,
+      engine_number_photo: formData.engine_number_photo
+      // chassis_number_photo_base64: formData.chassis_number_photo_base64,
+      // chassis_number_photo_base64: formData.engine_number_photo,
     };
 
     setLoading(true);
     try {
       const loanData = await submitLoanData(updatedData);
-      // console.log("LonData",loanData)
       if (loanData && loanData.loan) {
         setVisible(true);
         Alert.alert(
@@ -325,7 +476,10 @@ export default function Loan() {
           [
             {
               text: "OK",
-              onPress: () => navigation.navigate("ViewLoan", { loanId: loanData.loan.loan_id }),
+              onPress: () =>
+                navigation.navigate("ViewLoan", {
+                  loanId: loanData.loan.loan_id,
+                }),
             },
           ]
         );
@@ -382,13 +536,44 @@ export default function Loan() {
     fetchRole();
   }, []);
 
-  const handleInputChange = (field, value) => {
-  setFormData((prev) => ({
-    ...prev,
-    [field]: value,
-  }));
-};
+  useEffect(() => {
+    const fetchCustomerData = async () => {
+      try {
+        const response = await axios.get<Customer[]>(
+          "https://reiosglobal.com/srivarimob/api/customer"
+        );
+        const allCustomers = response.data;
 
+        console.log("All Customers:", allCustomers);
+
+        const filtered = allCustomers.filter(
+          (customer) =>
+            customer.user_id === customerdata.user_id &&
+            customer.username.toLowerCase() ===
+              customerdata.user_name.toLowerCase()
+        );
+
+        setFilteredCustomers(filtered);
+        console.log("Filtered Customers:", filtered);
+      } catch (error) {
+        console.error("Error fetching customer data:", error);
+      }
+    };
+
+    fetchCustomerData();
+  }, []);
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+
+    // Clear error when field is filled
+    if (value && errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
 
   const handleItemSelect = (userId) => {
     handleInputChange("user_id", userId);
@@ -427,104 +612,131 @@ export default function Loan() {
       }));
       setModels([]);
     }
+
+    // Clear error when field is filled
+    if (value && errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
   };
-const onLoanDateChange = async (event, selectedDate) => {
-  if (selectedDate) {
-    const formattedDate = selectedDate.toISOString().split("T")[0];
-    console.log("Selected Loan Date:", formattedDate);
-    handleInputChanges("loan_date", formattedDate);
 
-    if (tenure_month && !isNaN(Number(tenure_month))) {
-      console.log("Sending to backend:", {
-        loan_date: formattedDate,
-        tenure_month: Number(tenure_month),
-      });
+  const onLoanDateChange = async (event, selectedDate) => {
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split("T")[0];
+      console.log("Selected Loan Date:", formattedDate);
+      handleInputChanges("loan_date", formattedDate);
 
-      try {
-        const response = await fetch("http://192.168.1.20:8000/api/calculate-loan-close-date", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            loan_date: formattedDate,
-            tenure_month: Number(tenure_month),
-          }),
+      if (tenure_month && !isNaN(Number(tenure_month))) {
+        console.log("Sending to backend:", {
+          loan_date: formattedDate,
+          tenure_month: Number(tenure_month),
         });
 
-        const data = await response.json();
-        console.log("Backend Response:", data);
+        try {
+          const response = await fetch(
+            "https://reiosglobal.com/srivarimob/api/calculate-loan-close-date",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                loan_date: formattedDate,
+                tenure_month: Number(tenure_month),
+              }),
+            }
+          );
 
-      if (data.loan_close_date) {
-  handleInputChanges("loan_close_date", data.loan_close_date); // Add the "d" here
-}
+          const data = await response.json();
+          console.log("Backend Response:", data);
 
-      } catch (error) {
-        console.error("Loan closed date fetch failed:", error);
+          if (data.loan_closed_date) {
+            handleInputChanges("loan_closed_date", data.loan_closed_date);
+          }
+        } catch (error) {
+          console.error("Loan closed date fetch failed:", error);
+        }
+      } else {
+        console.warn("Tenure month is missing or invalid");
       }
-    } else {
-      console.warn("Tenure month is missing or invalid");
     }
-  }
-};
+  };
 
-const onLoanCloseDateChange = (event, selectedDate) => {
-  if (selectedDate) {
-    const formattedDate = selectedDate.toISOString().split("T")[0];
-    handleInputChanges("loan_close_date", formattedDate);
-  }
-};
+  const onLoanCloseDateChange = (event, selectedDate) => {
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split("T")[0];
+      handleInputChanges("loan_closed_date", formattedDate);
+    }
+  };
 
-  const [loanAmount, setLoanAmount] = useState('');
-  const [totalLoanAmount, setTotalLoanAmount] = useState(0);
+  const loancalculations = async () => {
+    if (!loanAmount || !tenure_month || !interest_percentage) {
+      Alert.alert(
+        "Error",
+        "Please fill loan amount, tenure and interest percentage first"
+      );
+      return;
+    }
 
-const loancalculations = async () => {
-  setLoading(true);
-  try {
-    const response = await api.post('loan/calculate', {
-      loan_amount: loanAmount,
-      tenure_month: tenure_month,
-      interest_percentage: interest_percentage,
-    });
+    setLoading(true);
+    try {
+      const response = await api.post("loan/calculate", {
+        loan_amount: loanAmount,
+        tenure_month: tenure_month,
+        interest_percentage: interest_percentage,
+      });
 
-   
-    console.log('API Response:', response);
+      console.log("API Raw Response:", response.data);
 
-    
+      const data = response.data;
 
-    const data = typeof response.data === 'string'
-      ? JSON.parse(response.data)
-      : response.data;
+      if (
+        typeof data === "object" &&
+        data.interest_amount &&
+        data.total_amount &&
+        data.monthly_due
+      ) {
+        setInterestAmount(Number(data.interest_amount));
+        setTotalAmount(Number(data.total_amount));
+        setMonthlyDue(Number(data.monthly_due));
+      } else {
+        Alert.alert("Error", "Invalid response format.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to calculate loan.");
+      console.error("Loan Calculation Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const { interest_amount, total_amount, monthly_due } = data;
-
-    setInterestAmount(Number(interest_amount));
-    setTotalAmount(Number(total_amount));
-    setMonthlyDue(Number(monthly_due));
-  } catch (error) {
-    Alert.alert('Error', 'Failed to calculate loan.');
-    console.error(error);
-  } finally {
-    setLoading(false);
-  }
-};
   useEffect(() => {
-    console.log('Updated formData:', formData);
+    console.log("Updated formData:", formData);
   }, [formData]);
 
   return (
     <ScrollView>
-     
       <View style={styles.container}>
-        <Text style={styles.headerText}>Loan Form</Text>
-
         {/* Customer Search Dropdown */}
         <SearchableDropdown
           items={customerdata}
           placeholder="Customer Name... or user ID"
           onItemSelect={handleItemSelect}
         />
+        {errors.user_id ? (
+          <Text style={styles.errorText}>{errors.user_id}</Text>
+        ) : null}
 
+        <TextInput
+          mode="outlined"
+          label="Loan ID *"
+          value={formData.loan_id}
+          onChangeText={(text) => handleInputChange("loan_id", text)}
+          style={styles.input}
+          error={!!errors.loan_id}
+        />
+        {errors.loan_id ? (
+          <Text style={styles.errorText}>{errors.loan_id}</Text>
+        ) : null}
         {/* Vehicle section */}
         <View style={styles.vehiclecontainer}>
           <TouchableOpacity
@@ -539,17 +751,36 @@ const loancalculations = async () => {
           {isFieldsVisible && (
             <View style={styles.addcontainer}>
               {/* Segment Picker */}
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  { backgroundColor: theme.colors.background },
+                ]}
+              >
                 <Picker
                   selectedValue={formData.segment}
-                  style={styles.inputPicker}
-                  onValueChange={(value) => handleInputChanges('segment', value)}
+                  style={[styles.inputPicker, { color: theme.colors.text }]}
+                  dropdownIconColor={theme.colors.text}
+                  onValueChange={(value) =>
+                    handleInputChanges("segment", value)
+                  }
                 >
                   <Picker.Item label="Select Segment" value="" />
                   <Picker.Item label="Two Wheeler" value="Two Wheeler" />
-                  <Picker.Item label="Three Wheeler - Auto" value="Three Wheeler - Auto" />
-                  <Picker.Item label="Three Wheeler - Load Auto" value="Three Wheeler - Load Auto" />
+                  <Picker.Item
+                    label="Three Wheeler - Auto"
+                    value="Three Wheeler - Auto"
+                  />
+                  <Picker.Item
+                    label="Three Wheeler - Load Auto"
+                    value="Three Wheeler - Load Auto"
+                  />
+
                   <Picker.Item label="Four Wheeler" value="Four Wheeler" />
+                  <Picker.Item
+                    label="Commerical - vehicle"
+                      value="Commercial"
+                  />
                 </Picker>
               </View>
 
@@ -559,21 +790,33 @@ const loancalculations = async () => {
                   style={styles.input}
                   placeholder="Enter Vehicle Maker"
                   value={formData.vehicle_make}
-                  onChangeText={(value) => handleInputChanges('vehicle_make', value)}
+                  onChangeText={(value) =>
+                    handleInputChanges("vehicle_make", value)
+                  }
                 />
               </View>
 
               {/* Year of Manufacture Dropdown */}
-              <View style={styles.pickerContainer}>
+              <View
+                style={[
+                  styles.pickerContainer,
+                  { backgroundColor: theme.colors.background },
+                ]}
+              >
                 <Picker
                   selectedValue={formData.year_of_manufacture}
-                  style={styles.dropdown}
-                  onValueChange={(value) => handleInputChange('year_of_manufacture', value)}
+                  style={[styles.inputPicker, { color: theme.colors.text }]}
+                  dropdownIconColor={theme.colors.text}
+                  onValueChange={(value) =>
+                    handleInputChange("year_of_manufacture", value)
+                  }
                 >
                   <Picker.Item label="Year of Manufacture" value="" />
                   {[...Array(30)].map((_, i) => {
                     const year = 2025 - i;
-                    return <Picker.Item label={`${year}`} value={year} key={year} />;
+                    return (
+                      <Picker.Item label={`${year}`} value={year} key={year} />
+                    );
                   })}
                 </Picker>
               </View>
@@ -586,48 +829,67 @@ const loancalculations = async () => {
                 value={formData.VIN_number}
                 style={styles.input}
                 onChangeText={(text) => {
-                  let filteredText = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                  let filteredText = text
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9]/g, "");
                   if (filteredText.length > 17) {
                     filteredText = filteredText.substring(0, 17);
                     setVinError("VIN cannot exceed 17 characters");
                   } else {
                     setVinError("");
                   }
-                  setFormData((prev) => ({ ...prev, VIN_number: filteredText }));
+                  setFormData((prev) => ({
+                    ...prev,
+                    VIN_number: filteredText,
+                  }));
                   if (text !== filteredText) {
-                    setVinError("Only uppercase letters and numbers are allowed");
+                    setVinError(
+                      "Only uppercase letters and numbers are allowed"
+                    );
                   }
                 }}
                 right={
-                  <TextInput.Icon icon={() => <Ionicons name="alpha-v" size={24} color="black" />} />
+                  <TextInput.Icon
+                    icon={() => (
+                      <MaterialCommunityIcons
+                        name="alpha-v"
+                        size={24}
+                        color="black"
+                      />
+                    )}
+                  />
                 }
               />
-              {vinError !== "" && <Text style={styles.errorText}>{vinError}</Text>}
+              {vinError !== "" && (
+                <Text style={styles.errorText}>{vinError}</Text>
+              )}
 
               {/* Engine Number */}
               <TextInput
                 mode="outlined"
                 label="Chassis Number"
-                value={formData.engine_number}
+                value={formData.chassis_number}
                 style={styles.input}
-                onChangeText={(value) => handleInputChange('engine_number', value)}
+                onChangeText={(value) =>
+                  handleInputChange("chassis_number", value)
+                }
               />
 
               {/* 3x2 Photo Grid for vehicle images */}
-              <View style={{ flexDirection: 'column' }}>
+              <View style={{ flexDirection: "column" }}>
                 {/* Row 1 */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 }}>
+                <View style={styles.photoContainer}>
                   {/* Front Photo */}
-                  <View style={{ alignItems: 'center' }}>
-                    {/* Button to open modal for Front Photo */}
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('vehicle_exterior_photo_front')}
+                      onPress={() => openModal("vehicle_exterior_photo_front")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Ionicons name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Ionicons name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>FrontPhoto</Text>
+                      <Text style={styles.filebuttonText}>Front Photo</Text>
                     </Button>
-                    {/* Show selected front photo */}
                     {formData.vehicle_exterior_photo_front ? (
                       <Avatar.Image
                         size={55}
@@ -636,15 +898,17 @@ const loancalculations = async () => {
                       />
                     ) : null}
                   </View>
+
                   {/* Back Photo */}
-                  <View style={{ alignItems: 'center' }}>
-                    {/* Button to open modal for Back Photo */}
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('vehicle_exterior_photo_back')}
+                      onPress={() => openModal("vehicle_exterior_photo_back")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Ionicons name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Ionicons name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>Back Photo</Text>
+                      <Text style={styles.filebuttonText}>Back Photo</Text>
                     </Button>
                     {formData.vehicle_exterior_photo_back ? (
                       <Avatar.Image
@@ -655,16 +919,19 @@ const loancalculations = async () => {
                     ) : null}
                   </View>
                 </View>
+
                 {/* Row 2 */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 }}>
+                <View style={styles.photoContainer}>
                   {/* Left Photo */}
-                  <View style={{ alignItems: 'center' }}>
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('vehicle_exterior_photo_left')}
+                      onPress={() => openModal("vehicle_exterior_photo_left")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Ionicons name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Ionicons name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>Left Photo</Text>
+                      <Text style={styles.filebuttonText}>Left Photo</Text>
                     </Button>
                     {formData.vehicle_exterior_photo_left ? (
                       <Avatar.Image
@@ -674,14 +941,17 @@ const loancalculations = async () => {
                       />
                     ) : null}
                   </View>
+
                   {/* Right Photo */}
-                  <View style={{ alignItems: 'center' }}>
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('vehicle_exterior_photo_right')}
+                      onPress={() => openModal("vehicle_exterior_photo_right")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Ionicons name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Ionicons name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>Right Photo</Text>
+                      <Text style={styles.filebuttonText}>Right Photo</Text>
                     </Button>
                     {formData.vehicle_exterior_photo_right ? (
                       <Avatar.Image
@@ -692,16 +962,19 @@ const loancalculations = async () => {
                     ) : null}
                   </View>
                 </View>
+
                 {/* Row 3 */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 }}>
+                <View style={styles.photoContainer}>
                   {/* Dashboard Photo */}
-                  <View style={{ alignItems: 'center' }}>
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('odometer_reading_photo')}
+                      onPress={() => openModal("odometer_reading_photo")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Icon name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Icon name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>Dashboard</Text>
+                      <Text style={styles.filebuttonText}>Dashboard</Text>
                     </Button>
                     {formData.odometer_reading_photo ? (
                       <Avatar.Image
@@ -711,19 +984,22 @@ const loancalculations = async () => {
                       />
                     ) : null}
                   </View>
+
                   {/* Chassis Photo */}
-                  <View style={{ alignItems: 'center' }}>
+                  <View style={styles.column}>
                     <Button
-                      onPress={() => openModal('chassis_number_photo')}
+                      onPress={() => openModal("engine_number_photo")}
                       style={styles.filebutton}
-                      icon={({ color, size }) => <Icon name="camera" size={15} color="#fff" />}
+                      icon={({ color, size }) => (
+                        <Icon name="camera" size={15} color="#fff" />
+                      )}
                     >
-                      <Text style={{ color: 'white' }}>Chasisphoto </Text>
+                      <Text style={styles.filebuttonText}>Chassis Photo</Text>
                     </Button>
-                    {formData.chassis_number_photo ? (
+                    {formData.engine_number_photo ? (
                       <Avatar.Image
                         size={55}
-                        source={{ uri: formData.chassis_number_photo }}
+                        source={{ uri: formData.engine_number_photo }}
                         style={styles.avatar}
                       />
                     ) : null}
@@ -740,40 +1016,60 @@ const loancalculations = async () => {
             value={loanAmount}
             onChangeText={(value) => {
               setLoanAmount(value);
-              handleInputChange('loan_amount', value);
+              handleInputChange("loan_amount", value);
             }}
             keyboardType="numeric"
+            error={!!errors.loan_amount}
           />
-<TextInput 
-  style={styles.input}
-  label="Tenure (Months)"
-  value={tenure_month}
-  onChangeText={(value) => {
-    setTenure(value);
-    handleInputChange("tenure_month", value);
+          {errors.loan_amount ? (
+            <Text style={styles.errorText}>{errors.loan_amount}</Text>
+          ) : null}
 
-    // 🔁 Trigger loan closed date calculation if loan_date is already selected
-    if (formData.loan_date && !isNaN(new Date(formData.loan_date))) {
-      onLoanDateChange(null, new Date(formData.loan_date));
-    }
-  }}
-  keyboardType="numeric"
-/>
+          <TextInput
+            style={styles.input}
+            label="Tenure (Months)"
+            value={tenure_month}
+            onChangeText={(value) => {
+              setTenure(value);
+              handleInputChange("tenure_month", value);
+              if (formData.loan_date && !isNaN(new Date(formData.loan_date))) {
+                onLoanDateChange(null, new Date(formData.loan_date));
+              }
+            }}
+            keyboardType="numeric"
+            error={!!errors.tenure_month}
+          />
+          {errors.tenure_month ? (
+            <Text style={styles.errorText}>{errors.tenure_month}</Text>
+          ) : null}
+
           <TextInput
             style={styles.input}
             label="Interest (%)"
             value={interest_percentage}
             onChangeText={(value) => {
               setInterest(value);
-              handleInputChange('interest_percentage', value);
+              handleInputChange("interest_percentage", value);
             }}
             keyboardType="numeric"
+            error={!!errors.interest_percentage}
           />
+          {errors.interest_percentage ? (
+            <Text style={styles.errorText}>{errors.interest_percentage}</Text>
+          ) : null}
 
           {/* Calculate Button */}
           <View style={{ padding: 20 }}>
-            <Button mode="contained" onPress={loancalculations} loading={loading} style={{ backgroundColor: '#FFC107' }}>
-              Calculate Loan
+            <Button
+              mode="contained"
+              onPress={loancalculations}
+              loading={loading}
+              style={{ backgroundColor: "#FFC107" }}
+              disabled={!loanAmount || !tenure_month || !interest_percentage}
+            >
+              <Text style={{ fontWeight: "bold", color: "#fff" }}>
+                Calculate Loan
+              </Text>
             </Button>
             {loading ? (
               <Text style={styles.loadingText}>Calculating...</Text>
@@ -807,108 +1103,153 @@ const loancalculations = async () => {
 
           {/* Dates */}
           <TextInput
-  mode="outlined"
-  label="Next Due Date"
-  value={formData.loan_date}
-  editable={false}
-  style={styles.input}
-  right={
-    <TextInput.Icon
-      icon={() => <Icon name="calendar" size={24} color="black" />}
-      onPress={() => setShowLoanDatePicker(true)}
-    />
-  }
-/>
-{showLoanDatePicker && (
-  <DateTimePicker
-    value={
-      formData.loan_date && !isNaN(new Date(formData.loan_date))
-        ? new Date(formData.loan_date)
-        : new Date()
-    }
-    mode="date"
-    display="default"
-    onChange={(event, selectedDate) => {
-      setShowLoanDatePicker(false);
-      onLoanDateChange(event, selectedDate);
-    }}
-  />
-)}
+            mode="outlined"
+            label="Next Due Date"
+            value={formatDate(formData.loan_date)}
+            editable={false}
+            style={styles.input}
+            error={!!errors.loan_date}
+            right={
+              <TextInput.Icon
+                icon={() => (
+                  <Icon
+                    name="calendar"
+                    size={24}
+                    color={
+                      userRole === "employee" &&
+                      formData.loan_date &&
+                      new Date(formData.loan_date) < new Date()
+                        ? "#ccc"
+                        : "black"
+                    }
+                  />
+                )}
+                onPress={() => {
+                  if (
+                    userRole !== "employee" ||
+                    !formData.loan_date ||
+                    new Date(formData.loan_date) >= new Date()
+                  ) {
+                    setShowLoanDatePicker(true);
+                  }
+                }}
+                disabled={
+                  userRole === "employee" &&
+                  formData.loan_date &&
+                  new Date(formData.loan_date) < new Date()
+                }
+              />
+            }
+          />
+          {errors.loan_date ? (
+            <Text style={styles.errorText}>{errors.loan_date}</Text>
+          ) : null}
+          {showLoanDatePicker && (
+            <DateTimePicker
+              value={
+                formData.loan_date && !isNaN(new Date(formData.loan_date))
+                  ? new Date(formData.loan_date)
+                  : new Date()
+              }
+              mode="date"
+              display="default"
+              minimumDate={userRole === "employee" ? new Date() : null}
+              onChange={(event, selectedDate) => {
+                setShowLoanDatePicker(false);
+                onLoanDateChange(event, selectedDate);
+              }}
+            />
+          )}
 
-{errors.loan_date && <Text style={styles.errorText}>{errors.loan_date}</Text>}
-
-<TextInput
-  importantForAutofill="yes"
-  mode="outlined"
-  label="Loan Closed Date"
-  value={formData.loan_close_date}
-  editable={false}
-  style={styles.input}
-  right={
-    <TextInput.Icon
-      icon={() => <Icon name="calendar" size={24} color="black" />}
-      onPress={() => setShowLoanCloseDatePicker(true)}
-    />
-  }
-/>
-{/* {showLoanCloseDatePicker && (
-  <DateTimePicker
-    value={
-      formData.loan_close_date && !isNaN(new Date(formData.loan_close_date))
-        ? new Date(formData.loan_close_date)
-        : new Date()
-    }
-    mode="date"
-    display="default"
-    onChange={(event, selectedDate) => {
-      setShowLoanCloseDatePicker(false);
-      onLoanCloseDateChange(event, selectedDate);
-    }}
-  />
-)} */}
-
-{errors.loan_close_date && <Text style={styles.errorText}>{errors.loan_close_date}</Text>}
+          <TextInput
+            importantForAutofill="yes"
+            mode="outlined"
+            label="Loan Closed Date"
+            value={formatDate(formData.loan_closed_date)}
+            editable={false}
+            style={styles.input}
+            right={
+              <TextInput.Icon
+                icon={() => <Icon name="calendar" size={24} color="black" />}
+                onPress={() => setShowLoanCloseDatePicker(true)}
+              />
+            }
+          />
+          {showLoanCloseDatePicker && (
+            <DateTimePicker
+              value={
+                formData.loan_closed_date &&
+                !isNaN(new Date(formData.loan_closed_date))
+                  ? new Date(formData.loan_closed_date)
+                  : new Date()
+              }
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                setShowLoanCloseDatePicker(false);
+                onLoanCloseDateChange(event, selectedDate);
+              }}
+            />
+          )}
 
           {/* Status Picker */}
-          <View style={styles.pickerContainer}>
+          <View
+            style={[
+              styles.pickerContainer,
+              { backgroundColor: theme.colors.background },
+            ]}
+          >
             <Picker
               selectedValue={formData.status}
-              style={styles.inputPicker}
-              onValueChange={(itemValue) => handleInputChange('status', itemValue)}
+              style={[styles.inputPicker, { color: theme.colors.text }]}
+              dropdownIconColor={theme.colors.text}
+              onValueChange={(itemValue) =>
+                handleInputChange("status", itemValue)
+              }
             >
-              <Picker.Item label="Status" />
+              <Picker.Item label="Select Status" value="" />
               <Picker.Item label="Pending" value="pending" />
               <Picker.Item label="In Progress" value="inprogress" />
               <Picker.Item label="Completed" value="completed" />
-              <Picker.Item label="Cancelled" value="cancelled" />
-              <Picker.Item label="Preclose" value="preclose" />
+              <Picker.Item label="Preclosed" value="preclose" />
             </Picker>
           </View>
-          {errors.status && <Text style={styles.errorText}>{errors.status}</Text>}
+          {errors.status ? (
+            <Text style={styles.errorText}>{errors.status}</Text>
+          ) : null}
 
           {/* Employee ID */}
           <TextInput
             mode="outlined"
-            label="Ref Employee ID"
+            label="Collection By (User ID)"
             value={Id}
             style={styles.input}
             editable={false}
           />
 
           {/* Transaction Proof & Photo */}
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            {formData.image ? (
-              <Avatar.Image size={90} source={{ uri: formData.image }} style={styles.avatar} />
-            ) : null}
-            <Button
-              onPress={() => openModal('image')}
-              icon={({ color, size }) => <Icon name="camera" size={20} color="#07387A" />}
-              style={[styles.filebuttons, { width: 320 }]}
-            >
-              <Text style={{ color: '#07387A' }}>Transaction Proof</Text>
-            </Button>
+          <View style={styles.tphotoContainer}>
+            {/* Transaction Proof Photo */}
+            <View style={styles.tcolumn}>
+              <Button
+                onPress={() => openModal("image")}
+                style={[styles.tfilebutton, { width: 320 }]}
+                icon={({ color, size }) => (
+                  <Icon name="camera" size={20} color="#fff" />
+                )}
+              >
+                <Text style={styles.tfilebuttonText}>Transaction Proof</Text>
+              </Button>
+
+              {formData.image ? (
+                <Avatar.Image
+                  size={90}
+                  source={{ uri: formData.image }}
+                  style={styles.tavatar}
+                />
+              ) : null}
+            </View>
           </View>
-          {errors.image && <Text style={styles.errorText}>{errors.image}</Text>}
 
           {/* Success Popup */}
           {visible && (
@@ -918,7 +1259,12 @@ const loancalculations = async () => {
           )}
 
           {/* Submit Button */}
-          <Button mode="contained" onPress={handleSubmit} style={styles.submitButton}>
+          <Button
+            mode="contained"
+            onPress={handleSubmit}
+            style={styles.submitButton}
+            loading={loading}
+          >
             <Text style={styles.submitbuttonText}>Add Loan</Text>
           </Button>
         </View>
@@ -936,7 +1282,7 @@ const loancalculations = async () => {
             vehicle_exterior_photo_left: false,
             vehicle_exterior_photo_right: false,
             odometer_reading_photo: false,
-            chassis_number_photo: false,
+            chassis_number_photo_base64: false,
             image: false,
           });
         }}
@@ -965,7 +1311,7 @@ const loancalculations = async () => {
                   vehicle_exterior_photo_left: false,
                   vehicle_exterior_photo_right: false,
                   odometer_reading_photo: false,
-                  chassis_number_photo: false,
+                  chassis_number_photo_base64: false,
                   image: false,
                 });
               }}
@@ -983,130 +1329,210 @@ const styles = StyleSheet.create({
   container1: {
     flex: 1,
     padding: 10,
-    backgroundColor: '#fff', 
+    backgroundColor: "#fff",
+  },
+  // Dropdown container styles
+  dropdownContainer: {
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 8,
+  },
+
+  // Item styles (for each dropdown option)
+  item: {
+    padding: 12,
+    marginVertical: 4,
+    backgroundColor: "#f9f9f9",
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 6,
   },
   input: {
     height: 50,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
     fontSize: 16,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   dropdown: {
     marginTop: 5,
     maxHeight: 200, // Adjust height as needed
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 4,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   item: {
     paddingVertical: 10,
     paddingHorizontal: 15,
-    borderBottomColor: '#eee',
+    borderBottomColor: "#eee",
     borderBottomWidth: 1,
   },
   itemText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   noResultsText: {
     marginTop: 10,
     fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
   },
   overlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 999,
   },
   container: {
     padding: 20,
-    backgroundColor: '#07387A',
+    paddingBottom: 180,
+    backgroundColor: "#fff",
   },
   headerText: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   vehiclecontainer: {
     marginVertical: 10,
   },
   addButton: {
-    backgroundColor: '#FFC107',
+    backgroundColor: "#FFC107",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
     marginBottom: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 16,
     marginLeft: 8,
   },
   addcontainer: {
     padding: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
     borderRadius: 8,
     marginBottom: 20,
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderRadius: 8,
     marginVertical: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   inputPicker: {
     height: 50,
-    width: '100%',
+    width: "100%",
   },
   inputContainer: {
     marginVertical: 8,
   },
   input: {
     height: 50,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   dropdown: {
     height: 50,
-    width: '100%',
+    width: "100%",
   },
-  filebuttons: {
-    backgroundColor: '#fff',
-    marginVertical: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
+  photoContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 10,
+  },
+  column: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 150, // 🔹 Fixed width for all cards
+    height: 150, // 🔹 Fixed height for all cards
+    backgroundColor: "#f2f2f2",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5ebf1ff",
+    padding: 10,
   },
   filebutton: {
-    backgroundColor: "#14274E",
+    backgroundColor: "#07387A",
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    paddingHorizontal: 8,
     borderRadius: 8,
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 10,
+  },
+  filebuttonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
   },
   avatar: {
-    marginLeft: 10,
-    marginVertical: 8,
+    marginTop: 10,
   },
+
+  tphotoContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 10,
+  },
+  tcolumn: {
+    alignItems: "center",
+    justifyContent: "center",
+    // width: 150,
+    // height: 150,
+    // backgroundColor: "#f2f2f2",
+    // borderRadius: 10,
+    // borderWidth:1 ,
+    // borderColor:"#e5ebf1ff",
+    padding: 10,
+  },
+  tfilebutton: {
+    backgroundColor: "#07387A",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 10,
+  },
+  tfilebuttonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  tavatar: {
+    marginTop: 10,
+  },
+
   resultCard: {
     backgroundColor: "#14274E",
     padding: 15,
@@ -1116,41 +1542,42 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   errorText: {
-    color: 'red',
+    color: "red",
     fontSize: 12,
     marginTop: 4,
   },
   popup: {
-    position: 'absolute',
-    top: '10%',
-    left: '10%',
-    right: '10%',
-    backgroundColor: '#4BB543',
+    position: "absolute",
+    top: "10%",
+    left: "10%",
+    right: "10%",
+    backgroundColor: "#4BB543",
     padding: 20,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 1000,
   },
   popupText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   submitButton: {
     marginTop: 20,
-    backgroundColor: '#FFC107',
+    backgroundColor: "#FFC107",
   },
   submitbuttonText: {
-    color: '#fff',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 16,
   },
   // Helper text style for VIN guidance
   helperText: {
     fontSize: 12,
-    color: 'gray',
+    color: "gray",
     marginLeft: 10,
     marginTop: 2,
   },
@@ -1193,3 +1620,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+
+ 
+
+//  LOG  Loan data response: {"emi_details": {"interest_per_month": 8832, "monthly_due": 28457, "principal_per_month": 19625, "total_amount": 341470, "total_interest": 105972.3}, "loan": {"VIN_number": "TNTN092", "VIN_plate_number_photo": null, "chassis_number": "72727", "created_at": "2025-09-19T08:30:13.000000Z", "due_amount": 28457, "employee_id": "A001", "engine_number": null, "engine_number_photo": "900000/68cd14953f616.jpeg", "id": 82, "image": "900000/68cd14953f237.jpeg", "interest_percentage": 45, "loan_amount": 235494, "loan_category": "monthly", "loan_closed_date": "2026-08-29", "loan_date": "2025-09-20", "loan_id": "900000", "odometer_reading_photo": null, "segment": "Commerical - vechicle", "status": "completed", "tenure_month": 12, "total_amount": 341470, "updated_at": "2025-09-19T08:30:13.000000Z", "user_id": "Test002", "user_name": "code success", "vehicle_exterior_photo_back": null, "vehicle_exterior_photo_front": "900000/68cd14953f4ee.jpeg", "vehicle_exterior_photo_left": null, "vehicle_exterior_photo_right": null, "vehicle_make": "Tata", "vehicle_model": null, "vehicle_price": 0, "year_of_manufacture": "2020"}, "message": "Loan created successfully."}
